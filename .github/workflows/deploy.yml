@@ -1,0 +1,52 @@
+name: "[DEPLOY] Docker build and deploy to EC2"
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*.*.*"]
+
+jobs:
+  deploy-to-ec2-main:
+    name: Deploy to EC2 (main)
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Conectar ao EC2 e Atualizar o Container main
+        env:
+          EC2_USER: ubuntu
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > private_key.pem
+          chmod 600 private_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            set -e
+            echo "Acessando diretório do projeto..."
+            cd /home/ubuntu/projects/GO-simpzap
+
+            echo "Atualizando código..."
+            git fetch --all
+            git checkout main
+            git pull origin main
+
+            echo "Construindo imagem Docker..."
+            docker build -t go-lms-prod .
+
+            echo "Parando container antigo..."
+            docker ps -q -f name=go-simpzap && docker stop go-simpzap || true
+            docker ps -a -q -f name=go-simpzap && docker rm go-simpzap || true
+
+            echo "Executando novo container..."
+            docker run -d -p 7071:8080 
+
+            echo "Limpando imagens antigas..."
+            docker image prune -f
+
+            echo "Deploy concluído!"
+          EOF
+
+          rm -f private_key.pem
