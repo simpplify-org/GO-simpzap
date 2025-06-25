@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -14,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"log"
 	"net/http"
+	"os"
 )
 
 const (
@@ -26,6 +28,17 @@ const (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func printCompactQR(data string) {
+	config := qrterminal.Config{
+		Level:      qrterminal.L,
+		Writer:     os.Stdout,
+		QuietZone:  1,
+		HalfBlocks: true,
+	}
+
+	qrterminal.GenerateWithConfig(data, config)
 }
 
 func sendMessage(client *whatsmeow.Client, to string, text string) error {
@@ -137,6 +150,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 					"event": "code",
 					"code":  evt.Code,
 				})
+				printCompactQR(evt.Code)
 			} else {
 				fmt.Println("Login event:", evt.Event)
 			}
@@ -158,5 +172,4 @@ func main() {
 	http.HandleFunc("/ws", wsHandler)
 	fmt.Println("Listening on :8080")
 	http.ListenAndServe(":8080", nil)
-
 }
