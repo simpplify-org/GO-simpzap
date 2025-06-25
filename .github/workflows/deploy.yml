@@ -34,14 +34,14 @@ jobs:
             git pull origin main
 
             echo "Construindo imagem Docker..."
-            docker build -t go-lms-prod .
+            docker build -t go-simpzap .
 
             echo "Parando container antigo..."
             docker ps -q -f name=go-simpzap && docker stop go-simpzap || true
             docker ps -a -q -f name=go-simpzap && docker rm go-simpzap || true
 
             echo "Executando novo container..."
-            docker run -d -p 7071:8080 
+            docker run -d -p 7072:8080 
 
             echo "Limpando imagens antigas..."
             docker image prune -f
