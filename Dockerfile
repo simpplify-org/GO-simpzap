@@ -1,4 +1,4 @@
-FROM golang:1.22.2-alpine AS builder
+FROM golang:1.24.4-alpine AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN cp -r /etc/ssl/certs /certs
 
 FROM scratch
 
-COPY --from=builder /app/app .
+COPY --from=builder /app/main .
 
 EXPOSE 8080
 
