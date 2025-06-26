@@ -30,6 +30,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+var sessaoFile = "./.data"
+
 func printCompactQR(data string) {
 	config := qrterminal.Config{
 		Level:      qrterminal.L,
@@ -68,12 +70,15 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
 	ctx := context.Background()
-	container, err := sqlstore.New(ctx, "sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
+
+	container, err := sqlstore.New(ctx, "sqlite3", "file:.data/examplestore.db?_foreign_keys=on", dbLog)
 	if err != nil {
+		log.Println("Erro ao abrir o DB", err)
 		ws.WriteJSON(map[string]string{
 			"event": "error",
-			"msg":   "Erro ao abrir DB",
+			"error": "Erro ao abrir o DB: " + err.Error(),
 		})
+		return
 	}
 
 	deviceStore, err := container.GetFirstDevice(ctx)
@@ -168,6 +173,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	os.MkdirAll(".data", 0755)
 	http.HandleFunc("/ws", wsHandler)
 	fmt.Println("Listening on :8080")
 	http.ListenAndServe(":8080", nil)

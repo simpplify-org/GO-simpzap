@@ -2,21 +2,23 @@ FROM golang:1.24.4-alpine AS builder
 
 WORKDIR /app
 
-COPY . /app
+# Instala ferramentas necessárias para compilar com CGO + SQLite
+RUN apk add --no-cache gcc musl-dev sqlite-dev
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/main.go
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN go mod tidy
+COPY . .
 
-RUN chmod +x main
+# ATENÇÃO: precisa do CGO_ENABLED=1
+RUN CGO_ENABLED=1 go build -o main ./cmd/main.go
 
-FROM alpine as certs
+# Etapa final usando Alpine com certificados
+FROM alpine
 
-RUN apk update && apk add --no-cache ca-certificates
+WORKDIR /app
 
-RUN cp -r /etc/ssl/certs /certs
-
-FROM scratch
+RUN apk add --no-cache ca-certificates sqlite-libs
 
 COPY --from=builder /app/main .
 
