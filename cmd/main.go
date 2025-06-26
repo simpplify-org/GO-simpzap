@@ -74,7 +74,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			"event": "error",
 			"msg":   "Erro ao abrir DB",
 		})
-		return
 	}
 
 	deviceStore, err := container.GetFirstDevice(ctx)
