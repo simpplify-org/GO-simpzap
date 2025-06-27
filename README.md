@@ -121,4 +121,4 @@ Formato JSON:
 
 ## 📄 Licença
 
-MIT
+Este projeto está sob a licença MIT.
