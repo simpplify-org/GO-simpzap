@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
@@ -173,8 +174,13 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	e := echo.New()
+
 	os.MkdirAll(".data", 0755)
-	http.HandleFunc("/ws", wsHandler)
+	e.GET("/ws", func(c echo.Context) error {
+		wsHandler(c.Response(), c.Request())
+		return nil
+	})
 	fmt.Println("Listening on :8080")
-	http.ListenAndServe(":8080", nil)
+	e.Logger.Fatal(e.Start(":8080"))
 }
