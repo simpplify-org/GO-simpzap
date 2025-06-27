@@ -10,6 +10,8 @@ RUN go mod download
 
 COPY . .
 
+COPY .env .env
+
 # ATENÇÃO: precisa do CGO_ENABLED=1
 RUN CGO_ENABLED=1 go build -o main ./cmd/main.go
 
