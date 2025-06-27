@@ -4,6 +4,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -12,7 +13,7 @@ import (
 )
 
 func GetSignatureString() string {
-	return os.Getenv("SIGNATURE_TOKEN")
+	return os.Getenv("TOKEN_SIGNATURE")
 }
 
 func loadMiddlewares(e *echo.Echo) {
@@ -49,12 +50,14 @@ func checkAuthorization(handlerFunc echo.HandlerFunc) echo.HandlerFunc {
 
 		maker, err := token.NewPasetoMaker(GetSignatureString())
 		if err != nil {
+			log.Println("token.NewPasetoMaker error", zap.Error(err))
 			return c.JSON(http.StatusBadGateway, err.Error())
 		}
 
 		tokenPayload, err := maker.VerifyToken(tokenStr)
 
 		if err != nil {
+			log.Println("token.VerifyToken error", zap.Error(err))
 			return c.JSON(http.StatusBadGateway, err.Error())
 		}
 		c.Set("token_id", tokenPayload.ID)
