@@ -66,7 +66,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
 	ctx := context.Background()
 
-	container, err := sqlstore.New(ctx, "sqlite3", "file:.data/examplestore.db?_foreign_keys=on", dbLog)
+	container, err := sqlstore.New(ctx, "sqlite3", "file:.data/session.db?_foreign_keys=on", dbLog)
 	if err != nil {
 		log.Println("Erro ao abrir o DB", err)
 		ws.WriteJSON(map[string]string{
