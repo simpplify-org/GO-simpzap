@@ -12,6 +12,7 @@ func main() {
 	if os.Getenv("TOKEN_SIGNATURE") == "" {
 		log.Println("TOKEN_SIGNATURE environment variable not set")
 	}
+	log.Println("TOKEN_SIGNATURE:", os.Getenv("TOKEN_SIGNATURE"))
 
 	os.MkdirAll(".data", 0755)
 	e := echo.New()
