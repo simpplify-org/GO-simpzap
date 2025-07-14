@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
-	"github.com/simpplify-org/GO-simpzap/internal/app"
+	"github.com/simpplify-org/GO-simpzap/app"
 	"log"
 	"os"
 )
