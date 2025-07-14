@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
@@ -54,11 +55,12 @@ func sendMessage(client *whatsmeow.Client, to string, text string) error {
 	return err
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
+func WsHandler(c echo.Context) error {
+
+	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 	fmt.Println(colorGreen + "WebSocket Connected" + colorReset)
 	defer ws.Close()
@@ -73,7 +75,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			"event": "error",
 			"error": "Erro ao abrir o DB: " + err.Error(),
 		})
-		return
+		return err
 	}
 
 	deviceStore, err := container.GetFirstDevice(ctx)
@@ -158,7 +160,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		err = client.Connect()
 		if err != nil {
 			ws.WriteJSON(map[string]string{"event": "error", "msg": "Erro ao reconectar"})
-			return
+			return err
 		}
 		ws.WriteJSON(map[string]string{"event": "restored", "msg": "Sessão restaurada com sucesso."})
 	}

@@ -45,7 +45,7 @@ func loadMiddlewares(e *echo.Echo) {
 func checkAuthorization(handlerFunc echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 
-		bearerToken := c.Request().Header.Get("Authorization")
+		bearerToken := c.QueryParam("token")
 		tokenStr := strings.Replace(bearerToken, "Bearer ", "", 1)
 
 		maker, err := token.NewPasetoMaker(GetSignatureString())

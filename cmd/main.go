@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"log"
 	"os"
@@ -9,10 +10,10 @@ import (
 )
 
 func main() {
-	//err := godotenv.Load(".env")
-	//if err != nil {
-	//	log.Fatal("Error loading .env file")
-	//}
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
 	if os.Getenv("TOKEN_SIGNATURE") == "" {
 		log.Println("TOKEN_SIGNATURE environment variable not set")
