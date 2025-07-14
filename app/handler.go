@@ -28,7 +28,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func printCompactQR(data string) {
+func PrintCompactQR(data string) {
 	config := qrterminal.Config{
 		Level:      qrterminal.L,
 		Writer:     os.Stdout,
@@ -57,7 +57,6 @@ func InitWhatsAppClient() (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, er
 
 	var qrChan <-chan whatsmeow.QRChannelItem
 	if client.Store.ID == nil {
-		// Apenas se for login novo
 		qrChan, _ = client.GetQRChannel(context.Background())
 	}
 
