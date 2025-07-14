@@ -176,7 +176,7 @@ func WsHandler(c echo.Context) error {
 					"event": "code",
 					"code":  evt.Code,
 				})
-				printCompactQR(evt.Code)
+				PrintCompactQR(evt.Code)
 			} else {
 				fmt.Println("Login event:", evt.Event)
 			}
