@@ -1,4 +1,4 @@
-module teste-whatsmeow-simp
+module github.com/simpplify-org/GO-simpzap
 
 go 1.24.4
 
