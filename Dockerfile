@@ -5,12 +5,12 @@ WORKDIR /app
 # Instala ferramentas necessárias para compilar com CGO + SQLite
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
+COPY .env .env
+
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-
-COPY .env .env
 
 # ATENÇÃO: precisa do CGO_ENABLED=1
 RUN CGO_ENABLED=1 go build -o main ./cmd/main.go

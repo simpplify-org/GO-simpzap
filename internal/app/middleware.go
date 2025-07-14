@@ -3,12 +3,12 @@ package app
 import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/simpplify-org/GO-simpzap/pkg/token"
 	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"os"
 	"strings"
-	"teste-whatsmeow-simp/pkg/token"
 	"time"
 )
 
