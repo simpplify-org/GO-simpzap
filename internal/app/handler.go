@@ -35,28 +35,51 @@ func printCompactQR(data string) {
 		QuietZone:  1,
 		HalfBlocks: true,
 	}
-
 	qrterminal.GenerateWithConfig(data, config)
 }
 
-func sendMessage(client *whatsmeow.Client, to string, text string) error {
-	jid := types.NewJID(to, "s.whatsapp.net")
+func InitWhatsAppClient() (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, error) {
+	ctx := context.Background()
+	dbLog := waLog.Stdout("Database", "DEBUG", true)
 
+	container, err := sqlstore.New(ctx, "sqlite3", "file:.data/session.db?_foreign_keys=on", dbLog)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Erro ao abrir o DB: %w", err)
+	}
+
+	deviceStore, err := container.GetFirstDevice(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Erro ao pegar o device: %w", err)
+	}
+
+	clientLog := waLog.Stdout("Client", "DEBUG", true)
+	client := whatsmeow.NewClient(deviceStore, clientLog)
+
+	var qrChan <-chan whatsmeow.QRChannelItem
+	if client.Store.ID == nil {
+		// Apenas se for login novo
+		qrChan, _ = client.GetQRChannel(context.Background())
+	}
+
+	err = client.Connect()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Erro ao conectar client: %w", err)
+	}
+
+	return client, qrChan, nil
+}
+
+func SendMessage(client *whatsmeow.Client, to string, text string) error {
+	jid := types.NewJID(to, "s.whatsapp.net")
 	msg := &waProto.Message{
 		Conversation: proto.String(text),
 	}
 
-	_, err := client.SendMessage(
-		context.Background(),
-		jid,
-		msg,
-		whatsmeow.SendRequestExtra{},
-	)
+	_, err := client.SendMessage(context.Background(), jid, msg, whatsmeow.SendRequestExtra{})
 	return err
 }
 
 func WsHandler(c echo.Context) error {
-
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		log.Println(err)
@@ -65,29 +88,34 @@ func WsHandler(c echo.Context) error {
 	fmt.Println(colorGreen + "WebSocket Connected" + colorReset)
 	defer ws.Close()
 
-	dbLog := waLog.Stdout("Database", "DEBUG", true)
-	ctx := context.Background()
-
-	container, err := sqlstore.New(ctx, "sqlite3", "file:.data/session.db?_foreign_keys=on", dbLog)
+	client, qrChan, err := InitWhatsAppClient()
 	if err != nil {
-		log.Println("Erro ao abrir o DB", err)
+		log.Println(err)
 		ws.WriteJSON(map[string]string{
 			"event": "error",
-			"error": "Erro ao abrir o DB: " + err.Error(),
+			"msg":   err.Error(),
 		})
 		return err
 	}
-
-	deviceStore, err := container.GetFirstDevice(ctx)
-	if err != nil {
+	if qrChan != nil {
+		for evt := range qrChan {
+			if evt.Event == "code" {
+				ws.WriteJSON(map[string]string{
+					"event": "code",
+					"code":  evt.Code,
+				})
+				printCompactQR(evt.Code)
+			} else {
+				fmt.Println("Login event:", evt.Event)
+			}
+		}
+	} else {
 		ws.WriteJSON(map[string]string{
-			"event": "error",
-			"msg":   "Erro ao pegar o device",
+			"event": "restored",
+			"msg":   "Sessão restaurada com sucesso.",
 		})
 	}
 
-	clientLog := waLog.Stdout("Client", "DEBUG", true)
-	client := whatsmeow.NewClient(deviceStore, clientLog)
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Disconnected:
@@ -103,7 +131,6 @@ func WsHandler(c echo.Context) error {
 		default:
 			_ = v
 		}
-
 	})
 
 	type IncomingMessage struct {
@@ -122,7 +149,7 @@ func WsHandler(c echo.Context) error {
 			}
 
 			if msg.Event == "send_message" {
-				err := sendMessage(client, msg.To, msg.Text)
+				err := SendMessage(client, msg.To, msg.Text)
 				if err != nil {
 					ws.WriteJSON(map[string]string{
 						"event": "send_error",
@@ -139,7 +166,6 @@ func WsHandler(c echo.Context) error {
 	}()
 
 	if client.Store.ID == nil {
-		// No ID stored, new login
 		qrChan, _ := client.GetQRChannel(context.Background())
 		err = client.Connect()
 		if err != nil {
@@ -166,5 +192,4 @@ func WsHandler(c echo.Context) error {
 	}
 
 	select {}
-
 }
