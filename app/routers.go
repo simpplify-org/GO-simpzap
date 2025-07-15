@@ -12,4 +12,8 @@ func Endpoints(e *echo.Echo) {
 		SendMessageHandler(c)
 		return nil
 	})
+	ws.GET("/status", func(c echo.Context) error {
+		WsHandler(c)
+		return nil
+	})
 }

@@ -213,3 +213,11 @@ func SendMessageHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, echo.Map{"status": "mensagem enviada com sucesso"})
 }
+
+func StatusHandler(c echo.Context) error {
+	status := "desconectado"
+	if GlobalClient.Store.ID != nil && GlobalClient.IsConnected() {
+		status = "conectado"
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": status})
+}
