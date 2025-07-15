@@ -8,4 +8,8 @@ func Endpoints(e *echo.Echo) {
 		WsHandler(c)
 		return nil
 	})
+	ws.POST("/send", func(c echo.Context) error {
+		SendMessageHandler(c)
+		return nil
+	})
 }

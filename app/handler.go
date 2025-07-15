@@ -38,6 +38,12 @@ func PrintCompactQR(data string) {
 	qrterminal.GenerateWithConfig(data, config)
 }
 
+var GlobalClient *whatsmeow.Client
+
+func GetClient() *whatsmeow.Client {
+	return GlobalClient
+}
+
 func InitWhatsAppClient() (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, error) {
 	ctx := context.Background()
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
@@ -65,6 +71,7 @@ func InitWhatsAppClient() (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, er
 		return nil, nil, fmt.Errorf("Erro ao conectar client: %w", err)
 	}
 
+	GlobalClient = client
 	return client, qrChan, nil
 }
 
@@ -191,4 +198,18 @@ func WsHandler(c echo.Context) error {
 	}
 
 	select {}
+}
+
+func SendMessageHandler(c echo.Context) error {
+	var req SendMessageRequest
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	if err := SendMessage(req.Client, req.To, req.Text); err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"status": "mensagem enviada com sucesso"})
 }
