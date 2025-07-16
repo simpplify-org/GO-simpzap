@@ -203,11 +203,17 @@ func WsHandler(c echo.Context) error {
 func SendMessageHandler(c echo.Context) error {
 	var req SendMessageRequest
 
+	client, qrChan, err := InitWhatsAppClient()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+	if qrChan != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "simppzap is not initialized yet"})
+	}
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-
-	if err := SendMessage(req.Client, req.To, req.Text); err != nil {
+	if err := SendMessage(client, req.To, req.Text); err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}
 
