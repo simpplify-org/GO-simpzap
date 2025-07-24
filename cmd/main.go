@@ -1,44 +1,30 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/simpplify-org/GO-simpzap/app"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"os"
 )
 
 func main() {
+	_ = godotenv.Load(".env")
 
-	if os.Getenv("TOKEN_SIGNATURE") == "" {
-		err := godotenv.Load(".env")
-		if err != nil {
-			log.Fatal("Error loading .env file")
-		}
-	}
-
-	os.MkdirAll(".data", 0755)
-
-	client, qrChan, err := app.InitWhatsAppClient()
+	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(os.Getenv("MONGO_URI")))
 	if err != nil {
-		log.Fatalf("Erro ao iniciar o client: %v", err)
+		log.Fatal("Erro ao conectar ao MongoDB: ", err)
 	}
+	db := mongoClient.Database("simpzap")
 
-	if qrChan != nil {
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				app.PrintCompactQR(evt.Code)
-			} else {
-				fmt.Println("Login event:", evt.Event)
-			}
-		}
-	}
+	deviceRepo := app.NewDeviceRepository(db)
+	waService := app.NewWhatsAppService(deviceRepo)
+	waHandler := app.NewWhatsAppHandler(waService)
 
 	e := echo.New()
-
-	handler := app.NewWhatsAppHandler(client)
-	handler.RegisterRoutes(e)
-
+	waHandler.RegisterRoutes(e)
 	e.Logger.Fatal(e.Start(":8080"))
 }

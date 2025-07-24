@@ -1,94 +1,117 @@
 package app
 
 import (
-	"log"
-	"net/http"
-
+	"context"
+	"fmt"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
-	"go.mau.fi/whatsmeow"
+	"github.com/mdp/qrterminal/v3"
+	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	"go.mau.fi/whatsmeow/types/events"
+	"net/http"
+	"os"
 )
 
 type WhatsAppHandler struct {
-	client *whatsmeow.Client
+	Service *WhatsAppService
 }
 
-func NewWhatsAppHandler(client *whatsmeow.Client) *WhatsAppHandler {
-	return &WhatsAppHandler{client: client}
+func NewWhatsAppHandler(s *WhatsAppService) *WhatsAppHandler {
+	return &WhatsAppHandler{Service: s}
 }
 
-var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
-	ws := e.Group("/ws", checkAuthorization)
-	ws.GET("/whatsapp", h.WsHandler)
-	ws.POST("/send", h.SendMessageHandler)
-	ws.GET("/status", h.StatusHandler)
+	e.POST("/send", h.SendMessage)
+	e.GET("/ws/create", h.HandleWebSocketCreate)
+	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
 
-func (h *WhatsAppHandler) SendMessageHandler(c echo.Context) error {
+func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 	var req SendMessageRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-	}
-	if err := SendMessage(h.client, req.To, req.Text); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "mensagem enviada com sucesso"})
-}
-
-func (h *WhatsAppHandler) StatusHandler(c echo.Context) error {
-	status := "desconectado"
-	if h.client.Store.ID != nil && h.client.IsConnected() {
-		status = "conectado"
-	}
-	return c.JSON(http.StatusOK, map[string]string{"status": status})
-}
-
-func (h *WhatsAppHandler) WsHandler(c echo.Context) error {
-	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
-	if err != nil {
-		log.Println(err)
 		return err
 	}
-	defer ws.Close()
 
-	client := h.client
+	err := h.Service.SendMessage(req.DeviceID, req.Number, req.Message)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "sent"})
+}
+
+func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
+	tenantID := c.QueryParam("tenant_id")
+	number := c.QueryParam("number")
+
+	if tenantID == "" || number == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "tenant_id e number são obrigatórios")
+	}
+
+	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	if err != nil {
+		return err
+	}
+	//defer ws.Close()
+
+	client, qrChan, sessionPath, err := whatsapp.CreateClient(uuid.NewString())
+	if err != nil {
+		ws.WriteJSON(map[string]string{"error": err.Error()})
+		return nil
+	}
+
+	if qrChan != nil {
+		for evt := range qrChan {
+			if evt.Event == "code" {
+				ws.WriteJSON(map[string]string{
+					"event": "code",
+					"code":  evt.Code,
+				})
+				qr := evt.Code
+				fmt.Println("Scan this QR code to log in:")
+				qrterminal.GenerateHalfBlock(qr, qrterminal.L, os.Stdout)
+			} else {
+				fmt.Println("Login event:", evt.Event)
+			}
+		}
+	} else {
+		ws.WriteJSON(map[string]string{
+			"event": "restored",
+			"msg":   "Sessão restaurada com sucesso.",
+		})
+	}
 
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Disconnected:
-			ws.WriteJSON(map[string]string{"event": "disconnected", "msg": "Desconectado. Escaneie o QR Code novamente."})
+			ws.WriteJSON(map[string]string{
+				"event": "disconnected",
+				"msg":   "Desconectado. Escaneie o QR Code novamente.",
+			})
 		case *events.Connected:
-			ws.WriteJSON(map[string]string{"event": "connected", "msg": "Conectado com sucesso!"})
+			ctx := context.Background()
+			device, err := h.Service.SaveConnectedDevice(ctx, tenantID, number, sessionPath)
+			if err != nil {
+				ws.WriteJSON(map[string]string{"error": err.Error()})
+				return
+			}
+			ws.WriteJSON(map[string]string{
+				"status":    "connected",
+				"device_id": device.ID.Hex(),
+				"number":    device.Number,
+				"tenant_id": device.TenantID,
+			})
+			ws.Close()
 		default:
 			_ = v
 		}
 	})
-
-	type IncomingMessage struct {
-		Event string `json:"event"`
-		To    string `json:"to"`
-		Text  string `json:"text"`
-	}
-
-	for {
-		var msg IncomingMessage
-		err := ws.ReadJSON(&msg)
-		if err != nil {
-			log.Println("Erro ao ler mensagem do cliente:", err)
-			break
-		}
-		if msg.Event == "send_message" {
-			err := SendMessage(client, msg.To, msg.Text)
-			if err != nil {
-				ws.WriteJSON(map[string]string{"event": "send_error", "msg": "Erro ao enviar mensagem: " + err.Error()})
-			} else {
-				ws.WriteJSON(map[string]string{"event": "message_sent", "msg": "Mensagem enviada para " + msg.To})
-			}
-		}
-	}
 
 	return nil
 }
