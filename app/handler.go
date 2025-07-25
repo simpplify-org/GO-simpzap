@@ -28,8 +28,8 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
-	e.POST("/send", h.SendMessage)
-	e.GET("/ws/create", h.HandleWebSocketCreate)
+	e.POST("/send", h.SendMessage, checkAuthorization)
+	e.GET("/ws/create", h.HandleWebSocketCreate, checkAuthorization)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
 

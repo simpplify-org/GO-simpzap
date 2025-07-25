@@ -12,7 +12,11 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load(".env")
+	if os.Getenv("MONGO_URI") == "" {
+		if err := godotenv.Load(".env"); err != nil {
+			panic("Error loading env file")
+		}
+	}
 
 	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(os.Getenv("MONGO_URI")))
 	if err != nil {

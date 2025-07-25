@@ -41,7 +41,7 @@ jobs:
             docker ps -a -q -f name=go-simpzap-prod-container && docker rm go-simpzap-prod-container || true
 
             echo "Executando novo container..."
-            docker run -d -p 7072:8080 --env-file .env --name go-simpzap-prod-container go-simpzap-prod
+            docker run -d -p 7072:8080 --env-file .env --name go-simpzap-prod-container --link mongo go-simpzap-prod
 
             echo "Limpando imagens antigas..."
             docker image prune -f
