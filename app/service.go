@@ -3,63 +3,92 @@ package app
 import (
 	"context"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/mdp/qrterminal/v3"
-	"go.mau.fi/whatsmeow"
+	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
-	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
-	waLog "go.mau.fi/whatsmeow/util/log"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/protobuf/proto"
 	"os"
+	"time"
 )
 
-func InitWhatsAppClient() (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, error) {
+type WhatsAppService struct {
+	Repo *DeviceRepository
+}
+
+func NewWhatsAppService(repo *DeviceRepository) *WhatsAppService {
+	return &WhatsAppService{Repo: repo}
+}
+
+func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
+	sessionBytes, err := s.Repo.GetSessionByDeviceID(context.Background(), deviceID)
+	if err != nil {
+		return fmt.Errorf("não foi possível obter sessão: %w", err)
+	}
+
+	client, _, err := whatsapp.StartClient(sessionBytes)
+	if err != nil {
+		return fmt.Errorf("erro ao iniciar client: %w", err)
+	}
+	defer client.Disconnect()
+
+	jid := types.NewJID(number, "s.whatsapp.net")
 	ctx := context.Background()
-	dbLog := waLog.Stdout("Database", "DEBUG", true)
-
-	container, err := sqlstore.New(ctx, "sqlite3", "file:.data/session.db?_foreign_keys=on", dbLog)
+	_, err = client.SendMessage(ctx, jid, &waProto.Message{
+		Conversation: proto.String(message),
+	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("Erro ao abrir o DB: %w", err)
+		return fmt.Errorf("erro ao enviar mensagem: %w", err)
 	}
-
-	deviceStore, err := container.GetFirstDevice(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Erro ao pegar o device: %w", err)
-	}
-
-	clientLog := waLog.Stdout("Client", "DEBUG", true)
-	client := whatsmeow.NewClient(deviceStore, clientLog)
-
-	var qrChan <-chan whatsmeow.QRChannelItem
-	if client.Store.ID == nil {
-		qrChan, _ = client.GetQRChannel(ctx)
-	}
-
-	err = client.Connect()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Erro ao conectar client: %w", err)
-	}
-
-	return client, qrChan, nil
+	return nil
 }
 
-func SendMessage(client *whatsmeow.Client, to string, text string) error {
-	jid := types.NewJID(to, "s.whatsapp.net")
-	msg := &waProto.Message{
-		Conversation: proto.String(text),
+func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) error {
+	sessionBytes, err := s.Repo.GetSessionByDeviceID(context.Background(), deviceID)
+	if err != nil {
+		return fmt.Errorf("não foi possível obter sessão: %w", err)
 	}
 
-	_, err := client.SendMessage(context.Background(), jid, msg, whatsmeow.SendRequestExtra{})
-	return err
+	client, qrChan, err := whatsapp.StartClient(sessionBytes)
+	if err != nil {
+		return fmt.Errorf("erro ao iniciar client: %w", err)
+	}
+	defer whatsapp.CloseClient(client)
+
+	go func() {
+		for evt := range qrChan {
+			if evt.Event == "code" {
+				fmt.Println("QR Code para reautenticação:", evt.Code)
+			}
+		}
+	}()
+
+	err = whatsapp.SendMessage(client, number, message)
+	if err != nil {
+		return fmt.Errorf("erro ao enviar mensagem: %w", err)
+	}
+
+	return nil
 }
 
-func PrintCompactQR(data string) {
-	config := qrterminal.Config{
-		Level:      qrterminal.L,
-		Writer:     os.Stdout,
-		QuietZone:  1,
-		HalfBlocks: true,
+func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, tenantID, number, sessionPath string) (*Device, error) {
+	sessionBytes, err := os.ReadFile(sessionPath)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler sessão: %w", err)
 	}
-	qrterminal.GenerateWithConfig(data, config)
+
+	device := &Device{
+		TenantID:  tenantID,
+		Number:    number,
+		CreatedAt: time.Now().Unix(),
+		SessionDB: sessionBytes,
+	}
+
+	res, err := s.Repo.Collection.InsertOne(ctx, device)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao salvar no MongoDB: %w", err)
+	}
+
+	device.ID = res.InsertedID.(primitive.ObjectID)
+	return device, nil
 }
