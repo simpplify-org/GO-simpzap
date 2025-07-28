@@ -92,7 +92,7 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 				qrterminal.GenerateHalfBlock(qr, qrterminal.L, os.Stdout)
 
 				if isNoToken && h.Reporter != nil {
-					if err := sendQRCodeToSlack(evt.Code, h.Reporter); err != nil {
+					if err := sendQRCodeToSlack(qr, h.Reporter); err != nil {
 						fmt.Println("Erro ao enviar QR para o Slack:", err)
 					}
 				}
@@ -137,10 +137,9 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 }
 
 func sendQRCodeToSlack(codeRaw string, reporter *slack.Reporter) error {
-	code := strings.Join(strings.Split(codeRaw, ","), "")
 	filePath := fmt.Sprintf("/tmp/qrcode-%d.png", time.Now().Unix())
 
-	if err := qrcode.WriteFile(code, qrcode.Medium, 256, filePath); err != nil {
+	if err := qrcode.WriteFile(codeRaw, qrcode.Medium, 256, filePath); err != nil {
 		return fmt.Errorf("erro ao gerar QR Code: %w", err)
 	}
 	defer os.Remove(filePath)
