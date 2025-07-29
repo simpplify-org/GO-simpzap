@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
+	"log"
+	"os"
+
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
+	"github.com/simpplify-org/GO-data-connector-lib/slack"
 	"github.com/simpplify-org/GO-simpzap/app"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
-	"os"
 )
 
 func main() {
@@ -24,9 +26,19 @@ func main() {
 	}
 	db := mongoClient.Database("simpzap")
 
+	config := slack.Config{
+		SlackToken: os.Getenv("SLACK_TOKEN"),
+		ChannelID: os.Getenv("SLACK_CHANNEL"),
+		CriticalChannelID: os.Getenv("SLACK_CRITICAL_CHANNEL"),
+		OnlyPanics:			false,
+		Debug: 				false,
+		Timeout: 			0,		
+	}
+	reporter := slack.New(config)
+
 	deviceRepo := app.NewDeviceRepository(db)
 	waService := app.NewWhatsAppService(deviceRepo)
-	waHandler := app.NewWhatsAppHandler(waService)
+	waHandler := app.NewWhatsAppHandler(waService, reporter)
 
 	e := echo.New()
 	waHandler.RegisterRoutes(e)
