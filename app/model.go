@@ -14,4 +14,6 @@ type Device struct {
 	Number    string             `bson:"number"`
 	CreatedAt int64              `bson:"created_at"`
 	SessionDB []byte             `bson:"session_db,omitempty"`
+	Connected bool               `bson:"connected"`
+	UpdatedAt int64              `bson:"updated_at"`
 }

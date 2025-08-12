@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/labstack/echo/v4/middleware"
 	"log"
 	"os"
 
@@ -27,12 +28,12 @@ func main() {
 	db := mongoClient.Database("simpzap")
 
 	config := slack.Config{
-		SlackToken: os.Getenv("SLACK_TOKEN"),
-		ChannelID: os.Getenv("SLACK_CHANNEL"),
+		SlackToken:        os.Getenv("SLACK_TOKEN"),
+		ChannelID:         os.Getenv("SLACK_CHANNEL"),
 		CriticalChannelID: os.Getenv("SLACK_CRITICAL_CHANNEL"),
-		OnlyPanics:			false,
-		Debug: 				false,
-		Timeout: 			0,		
+		OnlyPanics:        false,
+		Debug:             false,
+		Timeout:           0,
 	}
 	reporter := slack.New(config)
 
@@ -41,6 +42,12 @@ func main() {
 	waHandler := app.NewWhatsAppHandler(waService, reporter)
 
 	e := echo.New()
+
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"}, // ou "*"
+		AllowMethods: []string{echo.GET, echo.POST, echo.OPTIONS},
+	}))
+
 	waHandler.RegisterRoutes(e)
 	e.Logger.Fatal(e.Start(":8080"))
 }
