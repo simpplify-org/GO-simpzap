@@ -92,3 +92,36 @@ func (r *DeviceRepository) GetSessionByDeviceID(ctx context.Context, deviceID st
 	}
 	return device.SessionDB, nil
 }
+
+// repository.go (ou arquivo do repo)
+
+func (r *DeviceRepository) FindDeviceByTenantAndNumber(ctx context.Context, tenantID, number string) (*Device, error) {
+	filter := bson.M{"tenant_id": tenantID, "number": number}
+	device := &Device{}
+	err := r.Collection.FindOne(ctx, filter).Decode(device)
+	if err != nil {
+		return nil, err
+	}
+	return device, nil
+}
+
+func (r *DeviceRepository) InsertDevice(ctx context.Context, device *Device) (primitive.ObjectID, error) {
+	res, err := r.Collection.InsertOne(ctx, device)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+	return res.InsertedID.(primitive.ObjectID), nil
+}
+
+func (r *DeviceRepository) UpdateDeviceSession(ctx context.Context, tenantID, number string, session []byte) error {
+	filter := bson.M{"tenant_id": tenantID, "number": number}
+	update := bson.M{
+		"$set": bson.M{
+			"session_db": session,
+			"connected":  true,
+			"updated_at": time.Now().Unix(),
+		},
+	}
+	_, err := r.Collection.UpdateOne(ctx, filter, update)
+	return err
+}

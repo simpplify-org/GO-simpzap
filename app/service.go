@@ -6,6 +6,7 @@ import (
 	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/protobuf/proto"
 	"os"
@@ -72,23 +73,61 @@ func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) err
 }
 
 func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, tenantID, number, sessionPath string) (*Device, error) {
+	// Tenta encontrar dispositivo existente
+	existingDevice, err := s.FindDeviceByTenantAndNumber(ctx, tenantID, number)
+
+	// Lê os bytes da sessão atual
 	sessionBytes, err := os.ReadFile(sessionPath)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao ler sessão: %w", err)
 	}
 
-	device := &Device{
-		TenantID:  tenantID,
-		Number:    number,
-		CreatedAt: time.Now().Unix(),
-		SessionDB: sessionBytes,
-	}
+	if existingDevice != nil {
+		// Atualiza dispositivo existente
+		filter := bson.M{"_id": existingDevice.ID}
+		update := bson.M{
+			"$set": bson.M{
+				"session_db": sessionBytes,
+				"updated_at": time.Now().Unix(),
+				"connected":  true,
+			},
+		}
+		_, err = s.Repo.Collection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			return nil, fmt.Errorf("erro ao atualizar no MongoDB: %w", err)
+		}
+		existingDevice.SessionDB = sessionBytes
+		return existingDevice, nil
+	} else {
+		// Cria novo dispositivo
+		device := &Device{
+			TenantID:  tenantID,
+			Number:    number,
+			CreatedAt: time.Now().Unix(),
+			UpdatedAt: time.Now().Unix(),
+			SessionDB: sessionBytes,
+			Connected: true,
+		}
 
-	res, err := s.Repo.Collection.InsertOne(ctx, device)
+		res, err := s.Repo.Collection.InsertOne(ctx, device)
+		if err != nil {
+			return nil, fmt.Errorf("erro ao salvar no MongoDB: %w", err)
+		}
+
+		device.ID = res.InsertedID.(primitive.ObjectID)
+		return device, nil
+	}
+}
+
+func (s *WhatsAppService) FindDeviceByTenantAndNumber(ctx context.Context, tenantID, number string) (*Device, error) {
+	var device Device
+	err := s.Repo.Collection.FindOne(ctx, bson.M{
+		"tenant_id": tenantID,
+		"number":    number,
+	}).Decode(&device)
+
 	if err != nil {
-		return nil, fmt.Errorf("erro ao salvar no MongoDB: %w", err)
+		return nil, err
 	}
-
-	device.ID = res.InsertedID.(primitive.ObjectID)
-	return device, nil
+	return &device, nil
 }
