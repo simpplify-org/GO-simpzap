@@ -131,3 +131,25 @@ func (s *WhatsAppService) FindDeviceByTenantAndNumber(ctx context.Context, tenan
 	}
 	return &device, nil
 }
+
+func (s *WhatsAppService) GetAllDevices(ctx context.Context, tenantID string) ([]*Device, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenantID não pode ser vazio")
+	}
+
+	filter := bson.M{"tenant_id": tenantID}
+
+	cursor, err := s.Repo.Collection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar dispositivos: %w", err)
+	}
+
+	var devices []*Device
+	if err = cursor.All(ctx, &devices); err != nil {
+		return nil, fmt.Errorf("erro ao decodificar dispositivos: %w", err)
+	}
+
+	fmt.Printf("Dispositivos encontrados para tenant %s: %d\n", tenantID, len(devices))
+
+	return devices, nil
+}
