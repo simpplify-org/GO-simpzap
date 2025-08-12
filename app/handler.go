@@ -42,6 +42,7 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/ws/create", h.HandleWebSocketCreate, checkAuthorization)
 	e.GET("/ws/create/nt", h.HandleWebSocketCreateNew)
 	e.GET("/check/status/:device_id", h.GetSessionStatus)
+	e.GET("/connect", h.HandleWebSocketConnect)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
 
@@ -71,13 +72,11 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 		return err
 	}
 
-	// Verifica se já existe um dispositivo para este tenant/number
 	existingDevice, err := h.Service.FindDeviceByTenantAndNumber(context.Background(), tenantID, number)
 	var deviceID string
 	var sessionPath string
 
 	if err == nil && existingDevice != nil {
-		// Dispositivo existe, usa o ID e sessionPath existentes
 		deviceID = existingDevice.ID.Hex()
 		sessionPath = string(existingDevice.SessionDB)
 		ws.WriteJSON(map[string]string{
@@ -85,18 +84,16 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 			"device_id": deviceID,
 		})
 	} else {
-		// Cria novo dispositivo
+
 		deviceID = uuid.NewString()
 	}
 
-	// Cria/restaura o cliente
 	client, qrChan, newSessionPath, err := whatsapp.CreateClient(deviceID)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"error": err.Error()})
 		return nil
 	}
 
-	// Atualiza o sessionPath se for um novo dispositivo
 	if existingDevice == nil {
 		sessionPath = newSessionPath
 	}
@@ -221,7 +218,6 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 		return err
 	}
 
-	// Verifica se já existe um dispositivo
 	existingDevice, err := h.Service.FindDeviceByTenantAndNumber(context.Background(), tenantID, number)
 	var deviceID string
 
@@ -235,7 +231,6 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 		deviceID = uuid.NewString()
 	}
 
-	// Cria/restaura o cliente
 	client, qrChan, sessionPath, err := whatsapp.CreateClient(deviceID)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"error": err.Error()})
@@ -260,7 +255,7 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 			}
 		}
 	} else if existingDevice == nil {
-		// Se não tem QR chan e é um novo dispositivo, envia mensagem de sucesso
+
 		ws.WriteJSON(map[string]string{
 			"event": "restored_new",
 			"msg":   "Sessão criada com sucesso.",
@@ -291,6 +286,65 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 				"is_new":    existingDevice == nil,
 			})
 			ws.Close()
+		default:
+			_ = v
+		}
+	})
+
+	return nil
+}
+
+func (h *WhatsAppHandler) HandleWebSocketConnect(c echo.Context) error {
+	tenantID := c.QueryParam("tenant_id")
+	number := c.QueryParam("number")
+	if tenantID == "" || number == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "tenant_id e number são obrigatórios")
+	}
+	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	if err != nil {
+		return err
+	}
+	device, err := h.Service.FindDeviceByTenantAndNumber(context.Background(), tenantID, number)
+	if err != nil {
+		ws.WriteJSON(map[string]string{"error": err.Error(), "message": "Dispositivo não encontrado"})
+		ws.Close()
+		return nil
+	}
+
+	if len(device.ID) == 0 {
+		ws.WriteJSON(map[string]string{
+			"event":   "disconnected",
+			"message": "Nenhuma sessão salva",
+		})
+		ws.Close()
+		return nil
+	}
+
+	client, _, err := whatsapp.StartClient(device.SessionDB)
+	if err != nil {
+		ws.WriteJSON(map[string]string{"status": "error", "message": "Erro ao restaurar sessão"})
+		ws.Close()
+		return nil
+	}
+
+	client.AddEventHandler(func(evt interface{}) {
+		switch v := evt.(type) {
+		case *events.Connected:
+			_ = h.Service.UpdateDeviceConnectionStatus(context.Background(), device.ID, true)
+			ws.WriteJSON(map[string]interface{}{
+				"status":    "connected",
+				"device_id": device.ID.Hex(),
+				"number":    device.Number,
+				"tenant_id": device.TenantID,
+			})
+		case *events.Disconnected:
+			_ = h.Service.UpdateDeviceConnectionStatus(context.Background(), device.ID, false)
+			ws.WriteJSON(map[string]interface{}{
+				"status":    "disconnected",
+				"device_id": device.ID.Hex(),
+				"number":    device.Number,
+				"tenant_id": device.TenantID,
+			})
 		default:
 			_ = v
 		}
