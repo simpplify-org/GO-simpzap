@@ -17,3 +17,11 @@ type Device struct {
 	Connected bool               `bson:"connected"`
 	UpdatedAt int64              `bson:"updated_at"`
 }
+
+type DeviceResponse struct {
+	ID        string `json:"id"`
+	TenantID  string `json:"tenant_id"`
+	Number    string `json:"number"`
+	Connected bool   `json:"connected"`
+	CreatedAt int64  `json:"created_at"`
+}

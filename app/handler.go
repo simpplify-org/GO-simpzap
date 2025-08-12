@@ -43,6 +43,7 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/ws/create/nt", h.HandleWebSocketCreateNew)
 	e.GET("/check/status/:device_id", h.GetSessionStatus)
 	e.GET("/connect", h.HandleWebSocketConnect)
+	e.GET("/list/devices", h.GetDevices)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
 
@@ -351,4 +352,31 @@ func (h *WhatsAppHandler) HandleWebSocketConnect(c echo.Context) error {
 	})
 
 	return nil
+}
+
+func (h *WhatsAppHandler) GetDevices(c echo.Context) error {
+	var response []DeviceResponse
+	tenantID := c.QueryParam("tenant_id")
+	fmt.Printf("Recebida requisição para tenant: %s\n", tenantID)
+	if tenantID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "tenant_id é obrigatório")
+	}
+
+	devices, err := h.Service.GetAllDevices(context.Background(), tenantID)
+	if err != nil {
+		fmt.Printf("Erro ao buscar dispositivos: %v\n", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	for _, device := range devices {
+		response = append(response, DeviceResponse{
+			ID:        device.ID.Hex(),
+			TenantID:  device.TenantID,
+			Number:    device.Number,
+			Connected: device.Connected,
+			CreatedAt: device.CreatedAt,
+		})
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
