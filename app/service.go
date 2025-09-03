@@ -3,22 +3,26 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/protobuf/proto"
-	"os"
-	"time"
 )
 
 type WhatsAppService struct {
-	Repo *DeviceRepository
+	Repo                     *DeviceRepository
+	MessageHistoryRepository *MessageHistoryRepository
 }
 
-func NewWhatsAppService(repo *DeviceRepository) *WhatsAppService {
-	return &WhatsAppService{Repo: repo}
+func NewWhatsAppService(repo *DeviceRepository, messageHist *MessageHistoryRepository) *WhatsAppService {
+	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist}
 }
 
 func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
@@ -31,13 +35,34 @@ func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar client: %w", err)
 	}
-	defer client.Disconnect()
 
 	jid := types.NewJID(number, "s.whatsapp.net")
 	ctx := context.Background()
 	_, err = client.SendMessage(ctx, jid, &waProto.Message{
 		Conversation: proto.String(message),
 	})
+
+	status := "sent"
+	if err != nil {
+		status = "failed"
+	}
+
+	device, err := s.Repo.GetByID(ctx, deviceID)
+	if err != nil {
+		return fmt.Errorf("device não encontrado: %w", err)
+	}
+
+	_, saveErr := s.MessageHistoryRepository.InsertHistory(ctx, &MessageHistory{
+		TenantID: device.TenantID,
+		DeviceID: deviceID,
+		Number:   number,
+		Message:  message,
+		Status:   status,
+	})
+	if saveErr != nil {
+		log.Printf("Erro ao salvar histórico da mensagem: %v", saveErr)
+	}
+
 	if err != nil {
 		return fmt.Errorf("erro ao enviar mensagem: %w", err)
 	}
@@ -45,7 +70,9 @@ func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
 }
 
 func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) error {
-	sessionBytes, err := s.Repo.GetSessionByDeviceID(context.Background(), deviceID)
+	ctx := context.Background()
+
+	sessionBytes, err := s.Repo.GetSessionByDeviceID(ctx, deviceID)
 	if err != nil {
 		return fmt.Errorf("não foi possível obter sessão: %w", err)
 	}
@@ -54,7 +81,7 @@ func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) err
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar client: %w", err)
 	}
-	defer whatsapp.CloseClient(client)
+	//defer whatsapp.CloseClient(client)
 
 	go func() {
 		for evt := range qrChan {
@@ -65,6 +92,24 @@ func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) err
 	}()
 
 	err = whatsapp.SendMessage(client, number, message)
+
+	status := "sent"
+	if err != nil {
+		status = "failed"
+	}
+
+	_, saveErr := s.MessageHistoryRepository.InsertHistory(ctx, &MessageHistory{
+		ID:       primitive.NewObjectID(),
+		TenantID: "",
+		DeviceID: deviceID,
+		Number:   number,
+		Message:  message,
+		Status:   status,
+	})
+	if saveErr != nil {
+		log.Printf("Erro ao iniciar client: %v", saveErr)
+	}
+
 	if err != nil {
 		return fmt.Errorf("erro ao enviar mensagem: %w", err)
 	}
@@ -152,4 +197,52 @@ func (s *WhatsAppService) GetAllDevices(ctx context.Context, tenantID string) ([
 	fmt.Printf("Dispositivos encontrados para tenant %s: %d\n", tenantID, len(devices))
 
 	return devices, nil
+}
+
+func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, message string) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(numbers))
+	var successCount int
+	var mu sync.Mutex
+
+	for _, number := range numbers {
+		wg.Add(1)
+		go func(num string) {
+			defer wg.Done()
+
+			// Chama a função SendMessage original
+			if err := s.SendMessage(deviceId, num, message); err != nil {
+				errChan <- fmt.Errorf("erro ao enviar para %s: %w", num, err)
+			} else {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}(number)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	var errors []error
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		log.Printf("Envio em massa: %d sucessos, %d erros", successCount, len(errors))
+		for _, err := range errors {
+			log.Printf("Erro: %v", err)
+		}
+
+		if successCount == 0 {
+			return fmt.Errorf("todas as mensagens falharam: %v", errors[0])
+		}
+
+		log.Printf("Algumas mensagens falharam, mas %d foram enviadas com sucesso", successCount)
+		return nil
+	}
+
+	log.Printf("Envio em massa concluído: %d mensagens enviadas com sucesso", successCount)
+	return nil
 }
