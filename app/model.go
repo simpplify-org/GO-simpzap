@@ -45,3 +45,18 @@ type SendBulkMessageRequest struct {
 	Numbers  []string `json:"numbers" validate:"required,dive,required"`
 	Message  string   `json:"message" validate:"required"`
 }
+
+type ContactListRequest struct {
+	DeviceID  string    `bson:"device_id" json:"device_id"`
+	Name      string    `bson:"name" json:"name"`
+	Number    string    `bson:"number" json:"number"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+}
+
+type ContactListResponse struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	DeviceID  string             `bson:"device_id" json:"device_id"`
+	Name      string             `bson:"name" json:"name"`
+	Number    string             `bson:"number" json:"number"`
+	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
+}

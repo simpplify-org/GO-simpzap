@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -13,16 +14,18 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/protobuf/proto"
 )
 
 type WhatsAppService struct {
 	Repo                     *DeviceRepository
 	MessageHistoryRepository *MessageHistoryRepository
+	ListContactsRepository   *ContactListRepository
 }
 
-func NewWhatsAppService(repo *DeviceRepository, messageHist *MessageHistoryRepository) *WhatsAppService {
-	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist}
+func NewWhatsAppService(repo *DeviceRepository, messageHist *MessageHistoryRepository, listContacts *ContactListRepository) *WhatsAppService {
+	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist, ListContactsRepository: listContacts}
 }
 
 func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
@@ -245,4 +248,25 @@ func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, me
 
 	log.Printf("Envio em massa concluído: %d mensagens enviadas com sucesso", successCount)
 	return nil
+}
+
+func (s *WhatsAppService) InsertListContact(ctx context.Context, data ContactListRequest) (*mongo.InsertOneResult, error) {
+	return s.ListContactsRepository.InsertListContact(ctx, data)
+}
+
+func (s *WhatsAppService) ListContacts(ctx context.Context, deviceId string) ([]ContactListResponse, error) {
+	if deviceId == "" {
+		return nil, errors.New("device id não pode ser vazio")
+	}
+
+	contacts, err := s.ListContactsRepository.ListContacts(ctx, deviceId)
+	if err != nil {
+		return []ContactListResponse{}, fmt.Errorf("erro ao ler lista: %w", err)
+	}
+
+	return contacts, nil
+}
+
+func (s *WhatsAppService) DeleteContact(ctx context.Context, id string) error {
+	return s.ListContactsRepository.DeleteContact(ctx, id)
 }

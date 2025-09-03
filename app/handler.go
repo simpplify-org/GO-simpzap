@@ -48,6 +48,9 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/check/status/:device_id", h.GetSessionStatus)
 	e.GET("/connect", h.HandleWebSocketConnect)
 	e.GET("/list/devices", h.GetDevices)
+	e.POST("/contacts/create", h.InsertListContact)
+	e.GET("/contacts/list/:device_id", h.ListContacts)
+	e.DELETE("/contacts/delete/:device_id", h.DeleteContact)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
 
@@ -417,5 +420,57 @@ func (h *WhatsAppHandler) SendBulkMessage(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "sent",
 		"sent_to": strconv.Itoa(len(req.Numbers)),
+	})
+}
+
+func (h *WhatsAppHandler) InsertListContact(c echo.Context) error {
+	var req ContactListRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	result, err := h.Service.InsertListContact(context.Background(), req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"id": result.InsertedID,
+	})
+}
+
+func (h *WhatsAppHandler) ListContacts(c echo.Context) error {
+	var response []ContactListResponse
+
+	deviceID := c.Param("device_id")
+
+	contacts, err := h.Service.ListContacts(context.Background(), deviceID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	for _, contact := range contacts {
+		response = append(response, ContactListResponse{
+			ID:        contact.ID,
+			DeviceID:  contact.DeviceID,
+			Name:      contact.Name,
+			Number:    contact.Number,
+			CreatedAt: contact.CreatedAt,
+		})
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+func (h *WhatsAppHandler) DeleteContact(c echo.Context) error {
+	id := c.Param("id")
+
+	err := h.Service.DeleteContact(context.Background(), id)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status": "deleted",
 	})
 }

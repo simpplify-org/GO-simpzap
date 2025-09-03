@@ -21,6 +21,10 @@ type MessageHistoryRepository struct {
 	Collection *mongo.Collection
 }
 
+type ContactListRepository struct {
+	Collection *mongo.Collection
+}
+
 func NewDeviceRepository(db *mongo.Database) *DeviceRepository {
 	repo := &DeviceRepository{Collection: db.Collection("devices")}
 	indexModel := mongo.IndexModel{
@@ -58,6 +62,12 @@ func NewMessageHistoryRepository(db *mongo.Database) *MessageHistoryRepository {
 	if err != nil {
 		log.Fatalf("Erro ao criar índices em messages_history: %v", err)
 	}
+
+	return repo
+}
+
+func NewContactListRepository(db *mongo.Database) *ContactListRepository {
+	repo := &ContactListRepository{Collection: db.Collection("contacts")}
 
 	return repo
 }
@@ -130,4 +140,58 @@ func (r *MessageHistoryRepository) InsertHistory(ctx context.Context, msg *Messa
 		return primitive.NilObjectID, fmt.Errorf("erro ao inserir mensagem no histórico: %w", err)
 	}
 	return res.InsertedID.(primitive.ObjectID), nil
+}
+
+func (r *ContactListRepository) InsertListContact(ctx context.Context, data ContactListRequest) (*mongo.InsertOneResult, error) {
+	req := ContactListRequest{
+		DeviceID:  data.DeviceID,
+		Name:      data.Name,
+		Number:    data.Number,
+		CreatedAt: time.Now(),
+	}
+
+	return r.Collection.InsertOne(ctx, req)
+}
+
+func (r *ContactListRepository) ListContacts(ctx context.Context, deviceId string) ([]ContactListResponse, error) {
+	var contacts []ContactListResponse
+
+	filter := bson.M{"device_id": deviceId}
+	opts := options.Find().SetSort(bson.D{{Key: "name", Value: 1}})
+
+	cursor, err := r.Collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	if err := cursor.All(ctx, &contacts); err != nil {
+		return nil, err
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return contacts, nil
+}
+
+func (r *ContactListRepository) DeleteContact(ctx context.Context, id string) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{"_id": objID}
+
+	res, err := r.Collection.DeleteOne(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	if res.DeletedCount == 0 {
+		return fmt.Errorf("contact no encontrado")
+	}
+
+	return nil
 }

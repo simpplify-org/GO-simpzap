@@ -41,7 +41,8 @@ func main() {
 
 	deviceRepo := app.NewDeviceRepository(db)
 	messageRepo := app.NewMessageHistoryRepository(db)
-	waService := app.NewWhatsAppService(deviceRepo, messageRepo)
+	listContactRepo := app.NewContactListRepository(db)
+	waService := app.NewWhatsAppService(deviceRepo, messageRepo, listContactRepo)
 	waHandler := app.NewWhatsAppHandler(waService, reporter)
 
 	e := echo.New()
