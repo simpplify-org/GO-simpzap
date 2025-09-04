@@ -49,7 +49,7 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/connect", h.HandleWebSocketConnect)
 	e.GET("/list/devices", h.GetDevices)
 	e.POST("/contacts/create", h.InsertListContact)
-	e.GET("/contacts/list/:device_id", h.ListContacts)
+	e.GET("/contacts/list/:tenant_id", h.ListContacts)
 	e.DELETE("/contacts/delete/:id", h.DeleteContact)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
@@ -429,6 +429,13 @@ func (h *WhatsAppHandler) InsertListContact(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
 
+	deviceId := c.QueryParam("device_id")
+	if deviceId == "" {
+		return c.JSON(http.StatusBadRequest, "device_id nao pode ser vazio")
+	}
+
+	req.DeviceID = deviceId
+
 	result, err := h.Service.InsertListContact(context.Background(), req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err.Error())
@@ -442,9 +449,9 @@ func (h *WhatsAppHandler) InsertListContact(c echo.Context) error {
 func (h *WhatsAppHandler) ListContacts(c echo.Context) error {
 	var response []ContactListResponse
 
-	deviceID := c.Param("device_id")
+	tenantId := c.Param("tenant_id")
 
-	contacts, err := h.Service.ListContacts(context.Background(), deviceID)
+	contacts, err := h.Service.ListContacts(context.Background(), tenantId)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
@@ -452,6 +459,7 @@ func (h *WhatsAppHandler) ListContacts(c echo.Context) error {
 	for _, contact := range contacts {
 		response = append(response, ContactListResponse{
 			ID:        contact.ID,
+			TenantID:  contact.TenantID,
 			DeviceID:  contact.DeviceID,
 			Name:      contact.Name,
 			Number:    contact.Number,
