@@ -145,6 +145,7 @@ func (r *MessageHistoryRepository) InsertHistory(ctx context.Context, msg *Messa
 
 func (r *ContactListRepository) InsertListContact(ctx context.Context, data ContactListRequest) (*mongo.InsertOneResult, error) {
 	req := ContactListRequest{
+		TenantID:  data.TenantID,
 		DeviceID:  data.DeviceID,
 		Name:      data.Name,
 		Number:    data.Number,
@@ -154,10 +155,10 @@ func (r *ContactListRepository) InsertListContact(ctx context.Context, data Cont
 	return r.Collection.InsertOne(ctx, req)
 }
 
-func (r *ContactListRepository) ListContacts(ctx context.Context, deviceId string) ([]ContactListResponse, error) {
+func (r *ContactListRepository) ListContacts(ctx context.Context, tenantId string) ([]ContactListResponse, error) {
 	var contacts []ContactListResponse
 
-	filter := bson.M{"device_id": deviceId}
+	filter := bson.M{"tenant_id": tenantId}
 	opts := options.Find().SetSort(bson.D{{Key: "name", Value: 1}})
 
 	cursor, err := r.Collection.Find(ctx, filter, opts)

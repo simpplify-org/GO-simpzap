@@ -47,6 +47,7 @@ type SendBulkMessageRequest struct {
 }
 
 type ContactListRequest struct {
+	TenantID  string    `bson:"tenant_id" json:"tenant_id"`
 	DeviceID  string    `bson:"device_id" json:"device_id"`
 	Name      string    `bson:"name" json:"name"`
 	Number    string    `bson:"number" json:"number"`
@@ -55,6 +56,7 @@ type ContactListRequest struct {
 
 type ContactListResponse struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
+	TenantID  string             `bson:"tenant_id" json:"tenant_id"`
 	DeviceID  string             `bson:"device_id" json:"device_id"`
 	Name      string             `bson:"name" json:"name"`
 	Number    string             `bson:"number" json:"number"`
