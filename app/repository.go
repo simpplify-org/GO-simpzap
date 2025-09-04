@@ -4,15 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
-	"time"
 )
 
 type DeviceRepository struct {
+	Collection *mongo.Collection
+}
+
+type MessageHistoryRepository struct {
+	Collection *mongo.Collection
+}
+
+type ContactListRepository struct {
 	Collection *mongo.Collection
 }
 
@@ -29,6 +39,37 @@ func NewDeviceRepository(db *mongo.Database) *DeviceRepository {
 	if err != nil {
 		log.Fatalf("Erro ao criar índice único: %v", err)
 	}
+	return repo
+}
+
+func NewMessageHistoryRepository(db *mongo.Database) *MessageHistoryRepository {
+	repo := &MessageHistoryRepository{Collection: db.Collection("messages_history")}
+
+	// índices úteis para busca
+	indexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "tenant_id", Value: 1},
+				{Key: "device_id", Value: 1},
+				{Key: "timestamp", Value: -1},
+			},
+		},
+		{
+			Keys: bson.D{{Key: "number", Value: 1}},
+		},
+	}
+
+	_, err := repo.Collection.Indexes().CreateMany(context.Background(), indexes)
+	if err != nil {
+		log.Fatalf("Erro ao criar índices em messages_history: %v", err)
+	}
+
+	return repo
+}
+
+func NewContactListRepository(db *mongo.Database) *ContactListRepository {
+	repo := &ContactListRepository{Collection: db.Collection("contacts")}
+
 	return repo
 }
 
@@ -88,40 +129,70 @@ func (r *DeviceRepository) GetSessionByDeviceID(ctx context.Context, deviceID st
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("sessão não encontrada para deviceID")
 		}
-		return nil, err
+		return nil, nil
 	}
 	return device.SessionDB, nil
 }
 
-// repository.go (ou arquivo do repo)
-
-func (r *DeviceRepository) FindDeviceByTenantAndNumber(ctx context.Context, tenantID, number string) (*Device, error) {
-	filter := bson.M{"tenant_id": tenantID, "number": number}
-	device := &Device{}
-	err := r.Collection.FindOne(ctx, filter).Decode(device)
+func (r *MessageHistoryRepository) InsertHistory(ctx context.Context, msg *MessageHistory) (primitive.ObjectID, error) {
+	msg.Timestamp = time.Now()
+	res, err := r.Collection.InsertOne(ctx, msg)
 	if err != nil {
-		return nil, err
-	}
-	return device, nil
-}
-
-func (r *DeviceRepository) InsertDevice(ctx context.Context, device *Device) (primitive.ObjectID, error) {
-	res, err := r.Collection.InsertOne(ctx, device)
-	if err != nil {
-		return primitive.NilObjectID, err
+		return primitive.NilObjectID, fmt.Errorf("erro ao inserir mensagem no histórico: %w", err)
 	}
 	return res.InsertedID.(primitive.ObjectID), nil
 }
 
-func (r *DeviceRepository) UpdateDeviceSession(ctx context.Context, tenantID, number string, session []byte) error {
-	filter := bson.M{"tenant_id": tenantID, "number": number}
-	update := bson.M{
-		"$set": bson.M{
-			"session_db": session,
-			"connected":  true,
-			"updated_at": time.Now().Unix(),
-		},
+func (r *ContactListRepository) InsertListContact(ctx context.Context, data ContactListRequest) (*mongo.InsertOneResult, error) {
+	req := ContactListRequest{
+		DeviceID:  data.DeviceID,
+		Name:      data.Name,
+		Number:    data.Number,
+		CreatedAt: time.Now(),
 	}
-	_, err := r.Collection.UpdateOne(ctx, filter, update)
-	return err
+
+	return r.Collection.InsertOne(ctx, req)
+}
+
+func (r *ContactListRepository) ListContacts(ctx context.Context, deviceId string) ([]ContactListResponse, error) {
+	var contacts []ContactListResponse
+
+	filter := bson.M{"device_id": deviceId}
+	opts := options.Find().SetSort(bson.D{{Key: "name", Value: 1}})
+
+	cursor, err := r.Collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	if err := cursor.All(ctx, &contacts); err != nil {
+		return nil, err
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return contacts, nil
+}
+
+func (r *ContactListRepository) DeleteContact(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	res, err := r.Collection.DeleteOne(ctx, bson.M{"_id": objID})
+	if err != nil {
+		return err
+	}
+
+	if res.DeletedCount == 0 {
+		return fmt.Errorf("contact no encontrado")
+	}
+
+	return nil
 }

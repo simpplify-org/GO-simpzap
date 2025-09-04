@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/labstack/echo/v4/middleware"
 	"log"
 	"os"
+
+	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Erro ao conectar ao MongoDB: ", err)
 	}
+
 	db := mongoClient.Database("simpzap")
 
 	config := slack.Config{
@@ -38,14 +40,16 @@ func main() {
 	reporter := slack.New(config)
 
 	deviceRepo := app.NewDeviceRepository(db)
-	waService := app.NewWhatsAppService(deviceRepo)
+	messageRepo := app.NewMessageHistoryRepository(db)
+	listContactRepo := app.NewContactListRepository(db)
+	waService := app.NewWhatsAppService(deviceRepo, messageRepo, listContactRepo)
 	waHandler := app.NewWhatsAppHandler(waService, reporter)
 
 	e := echo.New()
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"}, // ou "*"
-		AllowMethods: []string{echo.GET, echo.POST, echo.OPTIONS},
+		AllowMethods: []string{echo.GET, echo.POST, echo.OPTIONS, echo.DELETE},
 	}))
 
 	waHandler.RegisterRoutes(e)
