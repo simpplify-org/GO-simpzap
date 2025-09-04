@@ -50,7 +50,7 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/list/devices", h.GetDevices)
 	e.POST("/contacts/create", h.InsertListContact)
 	e.GET("/contacts/list/:device_id", h.ListContacts)
-	e.DELETE("/contacts/delete/:device_id", h.DeleteContact)
+	e.DELETE("/contacts/delete/:id", h.DeleteContact)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
 
@@ -465,7 +465,7 @@ func (h *WhatsAppHandler) ListContacts(c echo.Context) error {
 func (h *WhatsAppHandler) DeleteContact(c echo.Context) error {
 	id := c.Param("id")
 
-	err := h.Service.DeleteContact(context.Background(), id)
+	err := h.Service.DeleteContact(c.Request().Context(), id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err.Error())
 	}

@@ -54,7 +54,7 @@ type ContactListRequest struct {
 }
 
 type ContactListResponse struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
 	DeviceID  string             `bson:"device_id" json:"device_id"`
 	Name      string             `bson:"name" json:"name"`
 	Number    string             `bson:"number" json:"number"`

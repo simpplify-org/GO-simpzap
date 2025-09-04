@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -128,7 +129,7 @@ func (r *DeviceRepository) GetSessionByDeviceID(ctx context.Context, deviceID st
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, fmt.Errorf("sessão não encontrada para deviceID")
 		}
-		return nil, err
+		return nil, nil
 	}
 	return device.SessionDB, nil
 }
@@ -177,14 +178,14 @@ func (r *ContactListRepository) ListContacts(ctx context.Context, deviceId strin
 }
 
 func (r *ContactListRepository) DeleteContact(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return err
 	}
 
-	filter := bson.M{"_id": objID}
-
-	res, err := r.Collection.DeleteOne(ctx, filter)
+	res, err := r.Collection.DeleteOne(ctx, bson.M{"_id": objID})
 	if err != nil {
 		return err
 	}

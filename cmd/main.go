@@ -49,7 +49,7 @@ func main() {
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"}, // ou "*"
-		AllowMethods: []string{echo.GET, echo.POST, echo.OPTIONS},
+		AllowMethods: []string{echo.GET, echo.POST, echo.OPTIONS, echo.DELETE},
 	}))
 
 	waHandler.RegisterRoutes(e)
