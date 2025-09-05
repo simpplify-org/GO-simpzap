@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
+	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 	"go.mongodb.org/mongo-driver/bson"
@@ -28,20 +29,11 @@ func NewWhatsAppService(repo *DeviceRepository, messageHist *MessageHistoryRepos
 	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist, ListContactsRepository: listContacts}
 }
 
-func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
-	sessionBytes, err := s.Repo.GetSessionByDeviceID(context.Background(), deviceID)
-	if err != nil {
-		return fmt.Errorf("não foi possível obter sessão: %w", err)
-	}
-
-	client, _, err := whatsapp.StartClient(sessionBytes)
-	if err != nil {
-		return fmt.Errorf("erro ao iniciar client: %w", err)
-	}
+func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number, message string) error {
 
 	jid := types.NewJID(number, "s.whatsapp.net")
 	ctx := context.Background()
-	_, err = client.SendMessage(ctx, jid, &waProto.Message{
+	_, err := client.SendMessage(ctx, jid, &waProto.Message{
 		Conversation: proto.String(message),
 	})
 
@@ -56,11 +48,12 @@ func (s *WhatsAppService) SendMessage(deviceID, number, message string) error {
 	}
 
 	_, saveErr := s.MessageHistoryRepository.InsertHistory(ctx, &MessageHistory{
-		TenantID: device.TenantID,
-		DeviceID: deviceID,
-		Number:   number,
-		Message:  message,
-		Status:   status,
+		DeviceName: device.Name,
+		TenantID:   device.TenantID,
+		DeviceID:   deviceID,
+		Number:     number,
+		Message:    message,
+		Status:     status,
 	})
 	if saveErr != nil {
 		log.Printf("Erro ao salvar histórico da mensagem: %v", saveErr)
@@ -204,6 +197,17 @@ func (s *WhatsAppService) GetAllDevices(ctx context.Context, tenantID string) ([
 }
 
 func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, message string) error {
+
+	sessionBytes, err := s.Repo.GetSessionByDeviceID(context.Background(), deviceId)
+	if err != nil {
+		return fmt.Errorf("não foi possível obter sessão: %w", err)
+	}
+
+	client, _, err := whatsapp.StartClient(sessionBytes)
+	if err != nil {
+		return fmt.Errorf("erro ao iniciar client: %w", err)
+	}
+
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(numbers))
 	var successCount int
@@ -214,13 +218,13 @@ func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, me
 		go func(num string) {
 			defer wg.Done()
 
-			// Chama a função SendMessage original
-			if err := s.SendMessage(deviceId, num, message); err != nil {
+			if err := s.SendMessage(client, deviceId, num, message); err != nil {
 				errChan <- fmt.Errorf("erro ao enviar para %s: %w", num, err)
 			} else {
 				mu.Lock()
 				successCount++
 				mu.Unlock()
+				fmt.Println("mensagem para ", num)
 			}
 		}(number)
 	}

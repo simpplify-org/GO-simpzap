@@ -33,13 +33,14 @@ type DeviceResponse struct {
 }
 
 type MessageHistory struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	TenantID  string             `bson:"tenant_id" json:"tenant_id"`
-	DeviceID  string             `bson:"device_id" json:"device_id"`
-	Number    string             `bson:"number" json:"number"`
-	Message   string             `bson:"message" json:"message"`
-	Status    string             `bson:"status" json:"status"` // "sent", "failed", "delivered"
-	Timestamp time.Time          `bson:"timestamp" json:"timestamp"`
+	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	DeviceName string             `bson:"device_name" json:"device_name"`
+	TenantID   string             `bson:"tenant_id" json:"tenant_id"`
+	DeviceID   string             `bson:"device_id" json:"device_id"`
+	Number     string             `bson:"number" json:"number"`
+	Message    string             `bson:"message" json:"message"`
+	Status     string             `bson:"status" json:"status"` // "sent", "failed", "delivered"
+	Timestamp  time.Time          `bson:"timestamp" json:"timestamp"`
 }
 
 type SendBulkMessageRequest struct {
