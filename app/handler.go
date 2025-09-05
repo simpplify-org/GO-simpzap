@@ -68,6 +68,7 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 }
 
 func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
+	name := c.QueryParam("name")
 	tenantID := c.QueryParam("tenant_id")
 	number := c.QueryParam("number")
 
@@ -137,7 +138,7 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 
 	client.AddEventHandler(func(evt interface{}) {
 		ctx := context.Background()
-		device, err := h.Service.SaveConnectedDevice(ctx, tenantID, number, sessionPath)
+		device, err := h.Service.SaveConnectedDevice(ctx, name, tenantID, number, sessionPath)
 		if err != nil {
 			ws.WriteJSON(map[string]string{"error": err.Error()})
 			return
@@ -166,6 +167,7 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 			}
 			ws.WriteJSON(map[string]string{
 				"status":    "connected",
+				"name":      device.Name,
 				"device_id": device.ID.Hex(),
 				"number":    device.Number,
 				"tenant_id": device.TenantID,
@@ -223,6 +225,7 @@ func (s *WhatsAppService) UpdateDeviceConnectionStatus(ctx context.Context, devi
 }
 
 func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
+	name := c.QueryParam("name")
 	tenantID := c.QueryParam("tenant_id")
 	number := c.QueryParam("number")
 
@@ -236,6 +239,10 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 	}
 
 	existingDevice, err := h.Service.FindDeviceByTenantAndNumber(context.Background(), tenantID, number)
+	if err != nil {
+		ws.WriteJSON(map[string]string{"error": err.Error()})
+	}
+
 	var deviceID string
 
 	if existingDevice != nil {
@@ -254,33 +261,8 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 		return nil
 	}
 
-	isNoToken := strings.HasSuffix(c.Path(), "/nt")
-
-	if qrChan != nil {
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				ws.WriteJSON(map[string]string{
-					"event": "code",
-					"code":  evt.Code,
-				})
-
-				if isNoToken && h.Reporter != nil {
-					if err := sendQRCodeToSlack(evt.Code, h.Reporter); err != nil {
-						fmt.Println("Erro ao enviar QR Code para o Slack:", err)
-					}
-				}
-			}
-		}
-	} else if existingDevice == nil {
-
-		ws.WriteJSON(map[string]string{
-			"event": "restored_new",
-			"msg":   "Sessão criada com sucesso.",
-		})
-	}
-
 	client.AddEventHandler(func(evt interface{}) {
-		device, err := h.Service.SaveConnectedDevice(context.Background(), tenantID, number, sessionPath)
+		device, err := h.Service.SaveConnectedDevice(context.Background(), name, tenantID, number, sessionPath)
 		if err != nil {
 			ws.WriteJSON(map[string]string{"error": err.Error()})
 			return
@@ -297,6 +279,7 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 			_ = h.Service.UpdateDeviceConnectionStatus(context.Background(), device.ID, true)
 			ws.WriteJSON(map[string]interface{}{
 				"status":    "connected",
+				"name":      name,
 				"device_id": device.ID.Hex(),
 				"number":    device.Number,
 				"tenant_id": device.TenantID,
@@ -307,6 +290,30 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 		}
 	})
 
+	isNoToken := strings.HasSuffix(c.Path(), "/nt")
+
+	if qrChan != nil {
+		go func() {
+			for evt := range qrChan {
+				if evt.Event == "code" {
+					ws.WriteJSON(map[string]string{
+						"event": "code",
+						"code":  evt.Code,
+					})
+					if isNoToken && h.Reporter != nil {
+						if err := sendQRCodeToSlack(evt.Code, h.Reporter); err != nil {
+							fmt.Println("Erro ao enviar QR Code para o Slack:", err)
+						}
+					}
+				}
+			}
+		}()
+	} else if existingDevice == nil {
+		ws.WriteJSON(map[string]string{
+			"event": "restored_new",
+			"msg":   "Sessão criada com sucesso.",
+		})
+	}
 	return nil
 }
 
@@ -384,6 +391,7 @@ func (h *WhatsAppHandler) GetDevices(c echo.Context) error {
 
 	for _, device := range devices {
 		response = append(response, DeviceResponse{
+			Name:      device.Name,
 			ID:        device.ID.Hex(),
 			TenantID:  device.TenantID,
 			Number:    device.Number,

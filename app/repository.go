@@ -73,8 +73,9 @@ func NewContactListRepository(db *mongo.Database) *ContactListRepository {
 	return repo
 }
 
-func (r *DeviceRepository) Create(ctx context.Context, tenantID, number string) (*Device, error) {
+func (r *DeviceRepository) Create(ctx context.Context, name, tenantID, number string) (*Device, error) {
 	device := &Device{
+		Name:      name,
 		TenantID:  tenantID,
 		Number:    number,
 		CreatedAt: time.Now().Unix(),

@@ -14,6 +14,7 @@ type SendMessageRequest struct {
 
 type Device struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"device_id"`
+	Name      string             `bson:"name" json:"name"`
 	TenantID  string             `bson:"tenant_id"`
 	Number    string             `bson:"number"`
 	CreatedAt int64              `bson:"created_at"`
@@ -23,6 +24,7 @@ type Device struct {
 }
 
 type DeviceResponse struct {
+	Name      string `json:"name"`
 	ID        string `json:"id"`
 	TenantID  string `json:"tenant_id"`
 	Number    string `json:"number"`

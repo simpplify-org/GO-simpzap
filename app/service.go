@@ -120,7 +120,7 @@ func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) err
 	return nil
 }
 
-func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, tenantID, number, sessionPath string) (*Device, error) {
+func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, name, tenantID, number, sessionPath string) (*Device, error) {
 	// Tenta encontrar dispositivo existente
 	existingDevice, err := s.FindDeviceByTenantAndNumber(ctx, tenantID, number)
 
@@ -149,6 +149,7 @@ func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, tenantID, num
 	} else {
 		// Cria novo dispositivo
 		device := &Device{
+			Name:      name,
 			TenantID:  tenantID,
 			Number:    number,
 			CreatedAt: time.Now().Unix(),
