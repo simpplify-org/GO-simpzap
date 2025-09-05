@@ -60,7 +60,17 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 		return err
 	}
 
-	err := h.Service.SendMessage(req.DeviceID, req.Number, req.Message)
+	sessionBytes, err := h.Service.Repo.GetSessionByDeviceID(context.Background(), req.DeviceID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "não foi possível obter sessão")
+	}
+
+	client, _, err := whatsapp.StartClient(sessionBytes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao iniciar client")
+	}
+
+	err = h.Service.SendMessage(client, req.DeviceID, req.Number, req.Message)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -330,7 +340,7 @@ func (h *WhatsAppHandler) HandleWebSocketConnect(c echo.Context) error {
 	device, err := h.Service.FindDeviceByTenantAndNumber(context.Background(), tenantID, number)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"error": err.Error(), "message": "Dispositivo não encontrado"})
-		ws.Close()
+		//ws.Close()
 		return nil
 	}
 
@@ -339,14 +349,14 @@ func (h *WhatsAppHandler) HandleWebSocketConnect(c echo.Context) error {
 			"event":   "disconnected",
 			"message": "Nenhuma sessão salva",
 		})
-		ws.Close()
+		//ws.Close()
 		return nil
 	}
 
 	client, _, err := whatsapp.StartClient(device.SessionDB)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"status": "error", "message": "Erro ao restaurar sessão"})
-		ws.Close()
+		//ws.Close()
 		return nil
 	}
 
