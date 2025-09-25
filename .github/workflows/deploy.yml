@@ -2,12 +2,101 @@ name: "[DEPLOY] Docker build and deploy to EC2"
 
 on:
   push:
-    branches: ["main"]
-    tags: ["v*.*.*"]
+    branches: ["main", "homolog", "develop"]
 
 jobs:
+  deploy-to-ec2-dev:
+    name: Deploy to EC2 (dev)
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'develop'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Conectar ao EC2 e Atualizar o Container dev
+        env:
+          EC2_USER: ubuntu
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > private_key.pem
+          chmod 600 private_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            set -e
+            echo ">>> Acessando diretório do projeto (dev)..."
+            cd /home/ubuntu/projects/GO-simpzap
+
+            echo ">>> Atualizando código (dev)..."
+            git fetch --all
+            git checkout develop
+            git pull origin develop
+
+            echo ">>> Construindo imagem Docker (dev)..."
+            docker build -t go-simpzap-dev .
+
+            echo ">>> Parando container antigo (dev)..."
+            docker ps -q -f name=go-simpzap-dev-container && docker stop go-simpzap-dev-container || true
+            docker ps -a -q -f name=go-simpzap-dev-container && docker rm go-simpzap-dev-container || true
+
+            echo ">>> Executando novo container (dev)..."
+            docker run -d -p 3372:8080 --env-file .env.dev --name go-simpzap-dev-container go-simpzap-dev
+
+            echo ">>> Limpando imagens antigas..."
+            docker image prune -f
+
+            echo ">>> Deploy dev concluído!"
+          EOF
+
+          rm -f private_key.pem
+
+  deploy-to-ec2-homolog:
+    name: Deploy to EC2 (homolog)
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'homolog'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Conectar ao EC2 e Atualizar o Container homolog
+        env:
+          EC2_USER: ubuntu
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > private_key.pem
+          chmod 600 private_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            set -e
+            echo ">>> Acessando diretório do projeto (homolog)..."
+            cd /home/ubuntu/projects/GO-simpzap
+
+            echo ">>> Atualizando código (homolog)..."
+            git fetch --all
+            git checkout homolog
+            git pull origin homolog
+
+            echo ">>> Construindo imagem Docker (homolog)..."
+            docker build -t go-simpzap-homolog .
+
+            echo ">>> Parando container antigo (homolog)..."
+            docker ps -q -f name=go-simpzap-homolog-container && docker stop go-simpzap-homolog-container || true
+            docker ps -a -q -f name=go-simpzap-homolog-container && docker rm go-simpzap-homolog-container || true
+
+            echo ">>> Executando novo container (homolog)..."
+            docker run -d -p 6672:8080 --env-file .env.homolog --name go-simpzap-homolog-container go-simpzap-homolog
+
+            echo ">>> Limpando imagens antigas..."
+            docker image prune -f
+
+            echo ">>> Deploy homolog concluído!"
+          EOF
+
+          rm -f private_key.pem
+
   deploy-to-ec2-main:
-    name: Deploy to EC2 (main)
+    name: Deploy to EC2 (prod)
     runs-on: ubuntu-latest
     if: github.ref_name == 'main'
     steps:
@@ -25,28 +114,28 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
             set -e
-            echo "Acessando diretório do projeto..."
+            echo ">>> Acessando diretório do projeto (prod)..."
             cd /home/ubuntu/projects/GO-simpzap
 
-            echo "Atualizando código..."
+            echo ">>> Atualizando código (prod)..."
             git fetch --all
             git checkout main
             git pull origin main
 
-            echo "Construindo imagem Docker..."
+            echo ">>> Construindo imagem Docker (prod)..."
             docker build -t go-simpzap-prod .
 
-            echo "Parando container antigo..."
+            echo ">>> Parando container antigo (prod)..."
             docker ps -q -f name=go-simpzap-prod-container && docker stop go-simpzap-prod-container || true
             docker ps -a -q -f name=go-simpzap-prod-container && docker rm go-simpzap-prod-container || true
 
-            echo "Executando novo container..."
-            docker run -d -p 7072:8080 --env-file .env --name go-simpzap-prod-container go-simpzap-prod
+            echo ">>> Executando novo container (prod)..."
+            docker run -d -p 7072:8080 --env-file .env.prod --name go-simpzap-prod-container go-simpzap-prod
 
-            echo "Limpando imagens antigas..."
+            echo ">>> Limpando imagens antigas..."
             docker image prune -f
 
-            echo "Deploy concluído!"
+            echo ">>> Deploy prod concluído!"
           EOF
 
           rm -f private_key.pem
