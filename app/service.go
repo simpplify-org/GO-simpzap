@@ -59,6 +59,9 @@ func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number
 		log.Printf("Erro ao salvar histórico da mensagem: %v", saveErr)
 	}
 
+	if err != nil {
+		return fmt.Errorf("erro ao enviar mensagem: %w", err)
+	}
 	return nil
 }
 
