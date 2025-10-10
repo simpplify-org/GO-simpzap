@@ -10,6 +10,8 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/o1egl/paseto v1.0.0
+	github.com/simpplify-org/GO-data-connector-lib v0.0.0-20250728195545-29a9055c82b9
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	go.mau.fi/whatsmeow v0.0.0-20251010113933-5806d60827b0
 	go.mongodb.org/mongo-driver v1.17.4
 	go.uber.org/zap v1.27.0
@@ -33,8 +35,6 @@ require (
 	github.com/petermattis/goid v0.0.0-20250904145737-900bdf8bb490 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
-	github.com/simpplify-org/GO-data-connector-lib v0.0.0-20250728195545-29a9055c82b9 // indirect
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	github.com/slack-go/slack v0.17.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
