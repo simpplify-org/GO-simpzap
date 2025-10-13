@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,22 +30,10 @@ func NewWhatsAppService(repo *DeviceRepository, messageHist *MessageHistoryRepos
 	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist, ListContactsRepository: listContacts}
 }
 
-func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number, message string) error {
-
-	jid := types.NewJID(number, "s.whatsapp.net")
-	ctx := context.Background()
-	_, err := client.SendMessage(ctx, jid, &waProto.Message{
-		Conversation: proto.String(message),
-	})
-
-	status := "sent"
-	if err != nil {
-		status = "failed"
-	}
-
+func (s *WhatsAppService) saveMessageStatus(ctx context.Context, deviceID, number, message, status string) error {
 	device, err := s.Repo.GetByID(ctx, deviceID)
 	if err != nil {
-		return fmt.Errorf("device não encontrado: %w", err)
+		return err
 	}
 
 	_, saveErr := s.MessageHistoryRepository.InsertHistory(ctx, &MessageHistory{
@@ -55,11 +44,49 @@ func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number
 		Message:    message,
 		Status:     status,
 	})
+	return saveErr
+}
+
+func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number, message string) (string, error) {
+	ctx := context.Background()
+
+	if client.Store.ID == nil || !client.IsConnected() {
+		status := "device expirado, abra uma nova sessão"
+		_ = s.saveMessageStatus(ctx, deviceID, number, message, status)
+		return status, fmt.Errorf(status)
+	}
+
+	jid := types.NewJID(number, "s.whatsapp.net")
+
+	resp, err := client.SendMessage(ctx, jid, &waProto.Message{
+		Conversation: proto.String(message),
+	})
+
+	status := "sent"
+	if err != nil {
+		errMsg := err.Error()
+
+		switch {
+		case strings.Contains(errMsg, "websocket disconnected"),
+			strings.Contains(errMsg, "failed to get device list"),
+			strings.Contains(errMsg, "failed to send usync query"):
+			status = "device expirado, abra uma nova sessão"
+			err = fmt.Errorf(status)
+
+		default:
+			status = "failed"
+		}
+		log.Printf("Erro ao enviar mensagem: %v", err)
+	} else {
+		log.Printf("Mensagem enviada com ID: %s", resp.ID)
+	}
+
+	saveErr := s.saveMessageStatus(ctx, deviceID, number, message, status)
 	if saveErr != nil {
 		log.Printf("Erro ao salvar histórico da mensagem: %v", saveErr)
 	}
 
-	return nil
+	return status, err
 }
 
 func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) error {
@@ -215,7 +242,7 @@ func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, me
 		go func(num string) {
 			defer wg.Done()
 
-			if err := s.SendMessage(client, deviceId, num, message); err != nil {
+			if _, err := s.SendMessage(client, deviceId, num, message); err != nil {
 				errChan <- fmt.Errorf("erro ao enviar para %s: %w", num, err)
 			} else {
 				mu.Lock()
