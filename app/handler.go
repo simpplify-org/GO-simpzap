@@ -70,11 +70,16 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao iniciar client")
 	}
 
-	err = h.Service.SendMessage(client, req.DeviceID, req.Number, req.Message)
+	status, err := h.Service.SendMessage(client, req.DeviceID, req.Number, req.Message)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"status": status,
+		})
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "sent"})
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"status": status,
+	})
 }
 
 func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
