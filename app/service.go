@@ -89,54 +89,6 @@ func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number
 	return status, err
 }
 
-func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) error {
-	ctx := context.Background()
-
-	sessionBytes, err := s.Repo.GetSessionByDeviceID(ctx, deviceID)
-	if err != nil {
-		return fmt.Errorf("não foi possível obter sessão: %w", err)
-	}
-
-	client, qrChan, err := whatsapp.StartClient(sessionBytes)
-	if err != nil {
-		return fmt.Errorf("erro ao iniciar client: %w", err)
-	}
-	//defer whatsapp.CloseClient(client)
-
-	go func() {
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				fmt.Println("QR Code para reautenticação:", evt.Code)
-			}
-		}
-	}()
-
-	err = whatsapp.SendMessage(client, number, message)
-
-	status := "sent"
-	if err != nil {
-		status = "failed"
-	}
-
-	_, saveErr := s.MessageHistoryRepository.InsertHistory(ctx, &MessageHistory{
-		ID:       primitive.NewObjectID(),
-		TenantID: "",
-		DeviceID: deviceID,
-		Number:   number,
-		Message:  message,
-		Status:   status,
-	})
-	if saveErr != nil {
-		log.Printf("Erro ao iniciar client: %v", saveErr)
-	}
-
-	if err != nil {
-		return fmt.Errorf("erro ao enviar mensagem: %w", err)
-	}
-
-	return nil
-}
-
 func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, name, tenantID, number, sessionPath string) (*Device, error) {
 	// Tenta encontrar dispositivo existente
 	existingDevice, err := s.FindDeviceByTenantAndNumber(ctx, tenantID, number)
