@@ -235,12 +235,12 @@ func (s *WhatsAppService) InsertListContact(ctx context.Context, data ContactLis
 	return s.ListContactsRepository.InsertListContact(ctx, data)
 }
 
-func (s *WhatsAppService) ListContacts(ctx context.Context, tenantId string) ([]ContactListResponse, error) {
-	if tenantId == "" {
-		return nil, errors.New("tenant id não pode ser vazio")
+func (s *WhatsAppService) ListContacts(ctx context.Context, deviceId string) ([]ContactListResponse, error) {
+	if deviceId == "" {
+		return nil, errors.New("device id não pode ser vazio")
 	}
 
-	contacts, err := s.ListContactsRepository.ListContacts(ctx, tenantId)
+	contacts, err := s.ListContactsRepository.ListContacts(ctx, deviceId)
 	if err != nil {
 		return []ContactListResponse{}, fmt.Errorf("erro ao ler lista: %w", err)
 	}

@@ -49,7 +49,7 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/connect", h.HandleWebSocketConnect)
 	e.GET("/list/devices", h.GetDevices)
 	e.POST("/contacts/create", h.InsertListContact)
-	e.GET("/contacts/list/:tenant_id", h.ListContacts)
+	e.GET("/contacts/list/:device_id", h.ListContacts)
 	e.DELETE("/contacts/delete/:id", h.DeleteContact)
 	//e.GET("/ws/:device_id", h.WebSocketConnection, checkAuthorization)
 }
@@ -472,7 +472,7 @@ func (h *WhatsAppHandler) InsertListContact(c echo.Context) error {
 func (h *WhatsAppHandler) ListContacts(c echo.Context) error {
 	var response []ContactListResponse
 
-	tenantId := c.Param("tenant_id")
+	tenantId := c.Param("device_id")
 
 	contacts, err := h.Service.ListContacts(context.Background(), tenantId)
 	if err != nil {
