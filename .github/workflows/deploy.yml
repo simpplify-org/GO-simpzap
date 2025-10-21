@@ -16,8 +16,8 @@ jobs:
       - name: Conectar ao EC2 e Atualizar o Container dev
         env:
           EC2_USER: ubuntu
-          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP_DEV_HML }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY_DEV_HML }}
         run: |
           echo "$SSH_KEY" > private_key.pem
           chmod 600 private_key.pem
@@ -61,8 +61,8 @@ jobs:
       - name: Conectar ao EC2 e Atualizar o Container homolog
         env:
           EC2_USER: ubuntu
-          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP_DEV_HML }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY_DEV_HML }}
         run: |
           echo "$SSH_KEY" > private_key.pem
           chmod 600 private_key.pem
