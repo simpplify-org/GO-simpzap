@@ -97,11 +97,15 @@ func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) err
 		return fmt.Errorf("não foi possível obter sessão: %w", err)
 	}
 
-	client, qrChan, err := whatsapp.StartClient(sessionBytes)
+	client, qrChan, err, path := whatsapp.StartClient(sessionBytes)
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar client: %w", err)
 	}
-	//defer whatsapp.CloseClient(client)
+	defer func() {
+		if err := whatsapp.CloseClient(client, path); err != nil {
+			log.Printf("Erro ao fechar client: %v", err)
+		}
+	}()
 
 	go func() {
 		for evt := range qrChan {
@@ -127,7 +131,7 @@ func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) err
 		Status:   status,
 	})
 	if saveErr != nil {
-		log.Printf("Erro ao iniciar client: %v", saveErr)
+		log.Printf("Erro ao salvar historico client: %v", saveErr)
 	}
 
 	if err != nil {
@@ -227,7 +231,7 @@ func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, me
 		return fmt.Errorf("não foi possível obter sessão: %w", err)
 	}
 
-	client, _, err := whatsapp.StartClient(sessionBytes)
+	client, _, err, _ := whatsapp.StartClient(sessionBytes)
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar client: %w", err)
 	}

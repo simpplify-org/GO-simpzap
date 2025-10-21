@@ -42,6 +42,7 @@ var upgrader = websocket.Upgrader{
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.POST("/send", h.SendMessage, checkAuthorization)
 	e.POST("/send/nt", h.SendMessage)
+	e.POST("/send/nt/async", h.SendMessageAsync)
 	e.POST("/send/many", h.SendBulkMessage)
 	e.GET("/ws/create", h.HandleWebSocketCreate, checkAuthorization)
 	e.GET("/ws/create/nt", h.HandleWebSocketCreateNew)
@@ -65,7 +66,7 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "não foi possível obter sessão")
 	}
 
-	client, _, err := whatsapp.StartClient(sessionBytes)
+	client, _, err, _ := whatsapp.StartClient(sessionBytes)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao iniciar client")
 	}
@@ -79,6 +80,22 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": status,
+	})
+}
+
+func (h *WhatsAppHandler) SendMessageAsync(c echo.Context) error {
+	var req SendMessageRequest
+	if err := c.Bind(&req); err != nil {
+		return err
+	}
+	err := h.Service.SendMessageAsync(req.DeviceID, req.Number, req.Message)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"status": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]string{
+		"status": "200",
 	})
 }
 
@@ -358,7 +375,7 @@ func (h *WhatsAppHandler) HandleWebSocketConnect(c echo.Context) error {
 		return nil
 	}
 
-	client, _, err := whatsapp.StartClient(device.SessionDB)
+	client, _, err, _ := whatsapp.StartClient(device.SessionDB)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"status": "error", "message": "Erro ao restaurar sessão"})
 		//ws.Close()

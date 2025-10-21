@@ -55,23 +55,29 @@ func CreateClient(deviceID string) (*whatsmeow.Client, <-chan whatsmeow.QRChanne
 
 // 2. Inicia client a partir do conteúdo binário da session (arquivo .db)
 // grava arquivo temporário, cria client, conecta e apaga arquivo depois
-func StartClient(sessionData []byte) (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, error) {
+func StartClient(sessionData []byte) (*whatsmeow.Client, <-chan whatsmeow.QRChannelItem, error, string) {
 	tmpFile := fmt.Sprintf(".data/session-temp-%d.db", time.Now().UnixNano())
 
 	if err := os.WriteFile(tmpFile, sessionData, 0600); err != nil {
-		return nil, nil, fmt.Errorf("erro ao gravar arquivo temporário: %w", err)
+		return nil, nil, fmt.Errorf("erro ao gravar arquivo temporário: %w", err), tmpFile
 	}
 
 	container, err := sqlstore.New(context.Background(), "sqlite3", "file:"+tmpFile+"?_foreign_keys=on", dbLog)
 	if err != nil {
-		os.Remove(tmpFile)
-		return nil, nil, fmt.Errorf("erro ao criar sqlstore: %w", err)
+		errRemove := os.Remove(tmpFile)
+		if errRemove != nil {
+			return nil, nil, fmt.Errorf("erro ao remover arquivo temp: %w", errRemove), tmpFile
+		}
+		return nil, nil, fmt.Errorf("erro ao criar sqlstore: %w", err), tmpFile
 	}
 
 	deviceStore, err := container.GetFirstDevice(context.Background())
 	if err != nil {
-		os.Remove(tmpFile)
-		return nil, nil, fmt.Errorf("erro ao obter device: %w", err)
+		errRemove := os.Remove(tmpFile)
+		if errRemove != nil {
+			return nil, nil, fmt.Errorf("erro ao remover arquivo temp: %w", errRemove), tmpFile
+		}
+		return nil, nil, fmt.Errorf("erro ao obter device: %w", err), tmpFile
 	}
 
 	client := whatsmeow.NewClient(deviceStore, clientLog)
@@ -92,19 +98,26 @@ func StartClient(sessionData []byte) (*whatsmeow.Client, <-chan whatsmeow.QRChan
 
 	err = client.Connect()
 	if err != nil {
-		os.Remove(tmpFile)
-		return nil, nil, fmt.Errorf("erro ao conectar no WhatsApp: %w", err)
+		errRemove := os.Remove(tmpFile)
+		if errRemove != nil {
+			return nil, nil, fmt.Errorf("erro ao remover arquivo temp: %w", errRemove), tmpFile
+		}
+		return nil, nil, fmt.Errorf("erro ao conectar no WhatsApp: %w", err), tmpFile
 	} else {
 		log.Println("Successfully connected to database and CLIENT")
 	}
-	return client, qrChan, nil
+	return client, qrChan, nil, tmpFile
 }
 
-func CloseClient(client *whatsmeow.Client) error {
-	if client == nil {
-		return nil
+func CloseClient(client *whatsmeow.Client, tmpFile string) error {
+	if client != nil {
+		client.Disconnect()
 	}
-	client.Disconnect()
+	if tmpFile != "" {
+		if err := os.Remove(tmpFile); err != nil && !os.IsNotExist(err) {
+			log.Printf("Erro ao remover arquivo temporário: %v", err)
+		}
+	}
 	return nil
 }
 
