@@ -33,14 +33,14 @@ jobs:
             git pull origin develop
 
             echo ">>> Construindo imagem Docker (dev)..."
-            docker build -t go-simpzap-dev .
+            docker build -t dev-go-simpzap .
 
             echo ">>> Parando container antigo (dev)..."
-            docker ps -q -f name=go-simpzap-dev-container && docker stop go-simpzap-dev-container || true
-            docker ps -a -q -f name=go-simpzap-dev-container && docker rm go-simpzap-dev-container || true
+            docker ps -q -f name=dev-go-simpzap-container && docker stop dev-go-simpzap-container || true
+            docker ps -a -q -f name=dev-go-simpzap-container && docker rm dev-go-simpzap-container || true
 
             echo ">>> Executando novo container (dev)..."
-            docker run -d -p 3372:8080 --env-file .env.dev --name go-simpzap-dev-container go-simpzap-dev
+            docker run -d -p 3372:8080 --env-file .env.dev --name dev-go-simpzap-container dev-go-simpzap
 
             echo ">>> Limpando imagens antigas..."
             docker image prune -f
@@ -78,14 +78,14 @@ jobs:
             git pull origin homolog
 
             echo ">>> Construindo imagem Docker (homolog)..."
-            docker build -t go-simpzap-homolog .
+            docker build -t homolog-go-simpzap .
 
             echo ">>> Parando container antigo (homolog)..."
-            docker ps -q -f name=go-simpzap-homolog-container && docker stop go-simpzap-homolog-container || true
-            docker ps -a -q -f name=go-simpzap-homolog-container && docker rm go-simpzap-homolog-container || true
+            docker ps -q -f name=homolog-go-simpzap-container && docker stop homolog-go-simpzap-container || true
+            docker ps -a -q -f name=homolog-go-simpzap-container && docker rm homolog-go-simpzap-container || true
 
             echo ">>> Executando novo container (homolog)..."
-            docker run -d -p 6672:8080 --env-file .env.homolog --name go-simpzap-homolog-container go-simpzap-homolog
+            docker run -d -p 6672:8080 --env-file .env.homolog --name homolog-go-simpzap-container homolog-go-simpzap
 
             echo ">>> Limpando imagens antigas..."
             docker image prune -f
@@ -123,14 +123,14 @@ jobs:
             git pull origin main
 
             echo ">>> Construindo imagem Docker (prod)..."
-            docker build -t go-simpzap-prod .
+            docker build -t prod-go-simpzap .
 
             echo ">>> Parando container antigo (prod)..."
-            docker ps -q -f name=go-simpzap-prod-container && docker stop go-simpzap-prod-container || true
-            docker ps -a -q -f name=go-simpzap-prod-container && docker rm go-simpzap-prod-container || true
+            docker ps -q -f name=prod-go-simpzap-container && docker stop prod-go-simpzap-container || true
+            docker ps -a -q -f name=prod-go-simpzap-container && docker rm prod-go-simpzap-container || true
 
             echo ">>> Executando novo container (prod)..."
-            docker run -d -p 9972:8080 --env-file .env.prod --name go-simpzap-prod-container go-simpzap-prod
+            docker run -d -p 9972:8080 --env-file .env.prod --name prod-go-simpzap-container prod-go-simpzap
 
             echo ">>> Limpando imagens antigas..."
             docker image prune -f
