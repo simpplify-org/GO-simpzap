@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.mau.fi/whatsmeow"
 	"log"
 	"os"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
-	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 	"go.mongodb.org/mongo-driver/bson"
@@ -24,10 +24,11 @@ type WhatsAppService struct {
 	Repo                     *DeviceRepository
 	MessageHistoryRepository *MessageHistoryRepository
 	ListContactsRepository   *ContactListRepository
+	ZapPkg                   *whatsapp.ZapPkg
 }
 
 func NewWhatsAppService(repo *DeviceRepository, messageHist *MessageHistoryRepository, listContacts *ContactListRepository) *WhatsAppService {
-	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist, ListContactsRepository: listContacts}
+	return &WhatsAppService{Repo: repo, MessageHistoryRepository: messageHist, ListContactsRepository: listContacts, ZapPkg: whatsapp.NewZapPkg()}
 }
 
 func (s *WhatsAppService) saveMessageStatus(ctx context.Context, deviceID, number, message, status string) error {
@@ -47,8 +48,17 @@ func (s *WhatsAppService) saveMessageStatus(ctx context.Context, deviceID, numbe
 	return saveErr
 }
 
-func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number, message string) (string, error) {
+func (s *WhatsAppService) SendMessage(deviceID, number, message string) (string, error) {
 	ctx := context.Background()
+	client, _, err := s.ZapPkg.StartClient(ctx, deviceID)
+	if err != nil {
+		return "device inválido", fmt.Errorf("erro ao iniciar client: %w", err)
+	}
+	defer func() {
+		if cerr := whatsapp.CloseClient(client); cerr != nil {
+			log.Printf("⚠️ erro ao fechar client WhatsApp: %v", cerr)
+		}
+	}()
 
 	if client.Store.ID == nil || !client.IsConnected() {
 		status := "device expirado, abra uma nova sessão"
@@ -89,70 +99,131 @@ func (s *WhatsAppService) SendMessage(client *whatsmeow.Client, deviceID, number
 	return status, err
 }
 
-func (s *WhatsAppService) SendMessageAsync(deviceID, number, message string) error {
+type SendTask struct {
+	Number string
+	Text   string
+}
+
+func (s *WhatsAppService) CreateOrStartClientService(deviceID string) (client *whatsmeow.Client, qr <-chan whatsmeow.QRChannelItem, err error) {
+	//chamar o defer na funcao que chamar esta aqui
 	ctx := context.Background()
-
-	sessionBytes, err := s.Repo.GetSessionByDeviceID(ctx, deviceID)
+	client, _, err = s.ZapPkg.StartClient(ctx, deviceID)
 	if err != nil {
-		return fmt.Errorf("não foi possível obter sessão: %w", err)
+		return client, nil, fmt.Errorf("erro ao iniciar client: %w", err)
 	}
+	return client, nil, nil
+}
 
-	client, qrChan, err, path := whatsapp.StartClient(sessionBytes)
+func (s *WhatsAppService) SendManyMessagesE2E(deviceID string, numbers []string, text string) error {
+	ctx := context.Background()
+	client, _, err := s.ZapPkg.StartClient(ctx, deviceID)
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar client: %w", err)
 	}
 	defer func() {
-		if err := whatsapp.CloseClient(client, path); err != nil {
-			log.Printf("Erro ao fechar client: %v", err)
+		if cerr := whatsapp.CloseClient(client); cerr != nil {
+			log.Printf("[Service] erro ao fechar client WhatsApp: %v", cerr)
 		}
 	}()
 
-	go func() {
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				fmt.Println("QR Code para reautenticação:", evt.Code)
+	if client.Store.ID == nil || !client.IsConnected() {
+		status := "device expirado, abra uma nova sessão"
+		for _, n := range numbers {
+			_ = s.saveMessageStatus(ctx, deviceID, n, text, status)
+		}
+		return fmt.Errorf(status)
+	}
+
+	const maxWorkers = 5
+	const delayBetweenBatches = 1 * time.Second
+
+	tasks := make(chan SendTask, len(numbers))
+	results := make(chan error, len(numbers))
+	var wg sync.WaitGroup
+
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for task := range tasks {
+				err = whatsapp.SendMessage(ctx, client, task.Number, task.Text, false)
+				status := "sent"
+				if err != nil {
+					errMsg := err.Error()
+					if strings.Contains(errMsg, "no signal session established") {
+						log.Printf("Worker %d: Erro de sessão Signal para %s. Tentando novamente em 3s...", workerID, task.Number)
+						time.Sleep(3 * time.Second)
+					}
+
+					switch {
+					case strings.Contains(errMsg, "websocket disconnected"),
+						strings.Contains(errMsg, "failed to get device list"),
+						strings.Contains(errMsg, "failed to send usync query"):
+						status = "device expirado, abra uma nova sessão"
+						err = fmt.Errorf(status)
+					default:
+						status = "failed"
+					}
+					results <- fmt.Errorf("erro ao enviar para %s: %w", task.Number, err)
+				} else {
+					log.Printf("Worker %d: Mensagem enviada para %s", workerID, task.Number)
+					results <- nil // Sucesso
+				}
+
+				if saveErr := s.saveMessageStatus(ctx, deviceID, task.Number, task.Text, status); saveErr != nil {
+					log.Printf("[Service] Erro ao salvar status para %s: %v", task.Number, saveErr)
+				}
+				time.Sleep(500 * time.Millisecond)
 			}
+		}(i)
+	}
+
+	for i, number := range numbers {
+		tasks <- SendTask{Number: number, Text: text}
+		if (i+1)%maxWorkers == 0 {
+			time.Sleep(delayBetweenBatches)
 		}
-	}()
+	}
+	close(tasks)
 
-	err = whatsapp.SendMessage(client, number, message)
+	wg.Wait()
+	close(results)
 
-	status := "sent"
-	if err != nil {
-		status = "failed"
+	var errMessage []error
+	successCount := 0
+	totalCount := len(numbers)
+
+	for res := range results {
+		if res != nil {
+			errMessage = append(errMessage, res)
+		} else {
+			successCount++
+		}
 	}
 
-	_, saveErr := s.MessageHistoryRepository.InsertHistory(ctx, &MessageHistory{
-		ID:       primitive.NewObjectID(),
-		TenantID: "",
-		DeviceID: deviceID,
-		Number:   number,
-		Message:  message,
-		Status:   status,
-	})
-	if saveErr != nil {
-		log.Printf("Erro ao salvar historico client: %v", saveErr)
+	if len(errMessage) > 0 {
+		if successCount == 0 {
+			return fmt.Errorf("todas as mensagens falharam: %v", errMessage[0])
+		}
+		log.Printf("[Service] Algumas mensagens falharam (%d de %d)", len(errMessage), totalCount)
+		for _, e := range errMessage {
+			log.Println("→", e)
+		}
+		return nil
 	}
-
-	if err != nil {
-		return fmt.Errorf("erro ao enviar mensagem: %w", err)
-	}
-
+	log.Printf("[Service] Envio em massa concluído com sucesso: %d mensagens enviadas", successCount)
 	return nil
 }
 
 func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, name, tenantID, number, sessionPath string) (*Device, error) {
-	// Tenta encontrar dispositivo existente
 	existingDevice, err := s.FindDeviceByTenantAndNumber(ctx, tenantID, number)
 
-	// Lê os bytes da sessão atual
 	sessionBytes, err := os.ReadFile(sessionPath)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao ler sessão: %w", err)
 	}
 
 	if existingDevice != nil {
-		// Atualiza dispositivo existente
 		filter := bson.M{"_id": existingDevice.ID}
 		update := bson.M{
 			"$set": bson.M{
@@ -168,7 +239,6 @@ func (s *WhatsAppService) SaveConnectedDevice(ctx context.Context, name, tenantI
 		existingDevice.SessionDB = sessionBytes
 		return existingDevice, nil
 	} else {
-		// Cria novo dispositivo
 		device := &Device{
 			Name:      name,
 			TenantID:  tenantID,
@@ -206,81 +276,18 @@ func (s *WhatsAppService) GetAllDevices(ctx context.Context, tenantID string) ([
 	if tenantID == "" {
 		return nil, fmt.Errorf("tenantID não pode ser vazio")
 	}
-
 	filter := bson.M{"tenant_id": tenantID}
 
 	cursor, err := s.Repo.Collection.Find(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar dispositivos: %w", err)
 	}
-
 	var devices []*Device
 	if err = cursor.All(ctx, &devices); err != nil {
 		return nil, fmt.Errorf("erro ao decodificar dispositivos: %w", err)
 	}
-
 	fmt.Printf("Dispositivos encontrados para tenant %s: %d\n", tenantID, len(devices))
-
 	return devices, nil
-}
-
-func (s *WhatsAppService) SendManyMessages(deviceId string, numbers []string, message string) error {
-
-	sessionBytes, err := s.Repo.GetSessionByDeviceID(context.Background(), deviceId)
-	if err != nil {
-		return fmt.Errorf("não foi possível obter sessão: %w", err)
-	}
-
-	client, _, err, _ := whatsapp.StartClient(sessionBytes)
-	if err != nil {
-		return fmt.Errorf("erro ao iniciar client: %w", err)
-	}
-
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(numbers))
-	var successCount int
-	var mu sync.Mutex
-
-	for _, number := range numbers {
-		wg.Add(1)
-		go func(num string) {
-			defer wg.Done()
-
-			if _, err := s.SendMessage(client, deviceId, num, message); err != nil {
-				errChan <- fmt.Errorf("erro ao enviar para %s: %w", num, err)
-			} else {
-				mu.Lock()
-				successCount++
-				mu.Unlock()
-				fmt.Println("mensagem para ", num)
-			}
-		}(number)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	var errors []error
-	for err := range errChan {
-		errors = append(errors, err)
-	}
-
-	if len(errors) > 0 {
-		log.Printf("Envio em massa: %d sucessos, %d erros", successCount, len(errors))
-		for _, err := range errors {
-			log.Printf("Erro: %v", err)
-		}
-
-		if successCount == 0 {
-			return fmt.Errorf("todas as mensagens falharam: %v", errors[0])
-		}
-
-		log.Printf("Algumas mensagens falharam, mas %d foram enviadas com sucesso", successCount)
-		return nil
-	}
-
-	log.Printf("Envio em massa concluído: %d mensagens enviadas com sucesso", successCount)
-	return nil
 }
 
 func (s *WhatsAppService) InsertListContact(ctx context.Context, data ContactListRequest) (*mongo.InsertOneResult, error) {
