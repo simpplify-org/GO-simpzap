@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	"log"
 	"net/http"
 	"os"
@@ -14,12 +15,10 @@ import (
 
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/simpplify-org/GO-data-connector-lib/slack"
-	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -42,7 +41,6 @@ var upgrader = websocket.Upgrader{
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.POST("/send", h.SendMessage, checkAuthorization)
 	e.POST("/send/nt", h.SendMessage)
-	e.POST("/send/nt/async", h.SendMessageAsync)
 	e.POST("/send/many", h.SendBulkMessage)
 	e.GET("/ws/create", h.HandleWebSocketCreate, checkAuthorization)
 	e.GET("/ws/create/nt", h.HandleWebSocketCreateNew)
@@ -60,18 +58,7 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
-
-	sessionBytes, err := h.Service.Repo.GetSessionByDeviceID(context.Background(), req.DeviceID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "não foi possível obter sessão")
-	}
-
-	client, _, err, _ := whatsapp.StartClient(sessionBytes)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao iniciar client")
-	}
-
-	status, err := h.Service.SendMessage(client, req.DeviceID, req.Number, req.Message)
+	status, err := h.Service.SendMessage(req.DeviceID, req.Number, req.Message)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"status": status,
@@ -80,22 +67,6 @@ func (h *WhatsAppHandler) SendMessage(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": status,
-	})
-}
-
-func (h *WhatsAppHandler) SendMessageAsync(c echo.Context) error {
-	var req SendMessageRequest
-	if err := c.Bind(&req); err != nil {
-		return err
-	}
-	err := h.Service.SendMessageAsync(req.DeviceID, req.Number, req.Message)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"status": err.Error(),
-		})
-	}
-	return c.JSON(http.StatusOK, map[string]string{
-		"status": "200",
 	})
 }
 
@@ -125,19 +96,18 @@ func (h *WhatsAppHandler) HandleWebSocketCreate(c echo.Context) error {
 			"device_id": deviceID,
 		})
 	} else {
-
-		deviceID = uuid.NewString()
+		deviceID = ""
 	}
-
-	client, qrChan, newSessionPath, err := whatsapp.CreateClient(deviceID)
+	client, qrChan, err := h.Service.CreateOrStartClientService(deviceID)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"error": err.Error()})
 		return nil
 	}
-
-	if existingDevice == nil {
-		sessionPath = newSessionPath
-	}
+	defer func() {
+		if cerr := whatsapp.CloseClient(client); cerr != nil {
+			log.Printf("[Handler] erro ao fechar client WhatsApp: %v", cerr)
+		}
+	}()
 
 	isNoToken := strings.HasSuffix(c.Path(), "/nt")
 
@@ -284,17 +254,21 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 			"device_id": deviceID,
 		})
 	} else {
-		deviceID = uuid.NewString()
+		deviceID = ""
 	}
-
-	client, qrChan, sessionPath, err := whatsapp.CreateClient(deviceID)
+	client, qrChan, err := h.Service.CreateOrStartClientService(deviceID)
 	if err != nil {
 		ws.WriteJSON(map[string]string{"error": err.Error()})
 		return nil
 	}
+	defer func() {
+		if cerr := whatsapp.CloseClient(client); cerr != nil {
+			log.Printf("[Handler] erro ao fechar client WhatsApp: %v", cerr)
+		}
+	}()
 
 	client.AddEventHandler(func(evt interface{}) {
-		device, err := h.Service.SaveConnectedDevice(context.Background(), name, tenantID, number, sessionPath)
+		device, err := h.Service.SaveConnectedDevice(context.Background(), name, tenantID, number, "Trocar")
 		if err != nil {
 			ws.WriteJSON(map[string]string{"error": err.Error()})
 			return
@@ -323,7 +297,6 @@ func (h *WhatsAppHandler) HandleWebSocketCreateNew(c echo.Context) error {
 	})
 
 	isNoToken := strings.HasSuffix(c.Path(), "/nt")
-
 	if qrChan != nil {
 		go func() {
 			for evt := range qrChan {
@@ -374,13 +347,17 @@ func (h *WhatsAppHandler) HandleWebSocketConnect(c echo.Context) error {
 		//ws.Close()
 		return nil
 	}
-
-	client, _, err, _ := whatsapp.StartClient(device.SessionDB)
+	client, _, err := h.Service.CreateOrStartClientService(device.ID.String())
 	if err != nil {
 		ws.WriteJSON(map[string]string{"status": "error", "message": "Erro ao restaurar sessão"})
 		//ws.Close()
 		return nil
 	}
+	defer func() {
+		if cerr := whatsapp.CloseClient(client); cerr != nil {
+			log.Printf("[Handler] erro ao fechar client WhatsApp: %v", cerr)
+		}
+	}()
 
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
@@ -452,7 +429,7 @@ func (h *WhatsAppHandler) SendBulkMessage(c echo.Context) error {
 		})
 	}
 
-	err := h.Service.SendManyMessages(req.DeviceID, req.Numbers, req.Message)
+	err := h.Service.SendManyMessagesE2E(req.DeviceID, req.Numbers, req.Message)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err.Error())
 	}

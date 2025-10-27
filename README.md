@@ -122,3 +122,6 @@ Formato JSON:
 ## 📄 Licença
 
 Este projeto está sob a licença MIT.
+
+go get -u go.mau.fi/whatsmeow@main
+go mod tidy
