@@ -125,3 +125,7 @@ Este projeto está sob a licença MIT.
 
 go get -u go.mau.fi/whatsmeow@main
 go mod tidy
+
+docker build -f client/client.Dockerfile -t zap-client:latest .
+
+docker build -f pkg/whatsapp/client/client.Dockerfile -t zap-client:latest .

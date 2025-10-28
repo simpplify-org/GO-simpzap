@@ -1,67 +1,19 @@
 package app
 
-import (
-	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
-)
-
-type SendMessageRequest struct {
-	DeviceID string `json:"device_id"`
-	Number   string `json:"number"`
-	Message  string `json:"message"`
+type CreateDeviceRequest struct {
+	Number string `json:"number" validate:"required"`
 }
 
-type Device struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"device_id"`
-	Name      string             `bson:"name" json:"name"`
-	TenantID  string             `bson:"tenant_id"`
-	Number    string             `bson:"number"`
-	CreatedAt int64              `bson:"created_at"`
-	SessionDB []byte             `bson:"session_db,omitempty"`
-	Connected bool               `bson:"connected"`
-	UpdatedAt int64              `bson:"updated_at"`
+type DeleteDeviceRequest struct {
+	Number string `json:"number" validate:"required"`
 }
 
-type DeviceResponse struct {
-	Name      string `json:"name"`
-	ID        string `json:"id"`
-	TenantID  string `json:"tenant_id"`
-	Number    string `json:"number"`
-	Connected bool   `json:"connected"`
-	CreatedAt int64  `json:"created_at"`
+type CreateDeviceResponse struct {
+	Status   string `json:"status"`
+	Endpoint string `json:"endpoint"`
+	ID       string `json:"id"`
 }
 
-type MessageHistory struct {
-	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	DeviceName string             `bson:"device_name" json:"device_name"`
-	TenantID   string             `bson:"tenant_id" json:"tenant_id"`
-	DeviceID   string             `bson:"device_id" json:"device_id"`
-	Number     string             `bson:"number" json:"number"`
-	Message    string             `bson:"message" json:"message"`
-	Status     string             `bson:"status" json:"status"` // "sent", "failed", "delivered"
-	Timestamp  time.Time          `bson:"timestamp" json:"timestamp"`
-}
-
-type SendBulkMessageRequest struct {
-	DeviceID string   `json:"device_id" validate:"required"`
-	Numbers  []string `json:"numbers" validate:"required,dive,required"`
-	Message  string   `json:"message" validate:"required"`
-}
-
-type ContactListRequest struct {
-	TenantID  string    `bson:"tenant_id" json:"tenant_id"`
-	DeviceID  string    `bson:"device_id" json:"device_id"`
-	Name      string    `bson:"name" json:"name"`
-	Number    string    `bson:"number" json:"number"`
-	CreatedAt time.Time `bson:"created_at" json:"created_at"`
-}
-
-type ContactListResponse struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
-	TenantID  string             `bson:"tenant_id" json:"tenant_id"`
-	DeviceID  string             `bson:"device_id" json:"device_id"`
-	Name      string             `bson:"name" json:"name"`
-	Number    string             `bson:"number" json:"number"`
-	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
+type DeleteDeviceResponse struct {
+	Status string `json:"status"`
 }
