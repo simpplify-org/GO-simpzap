@@ -1,0 +1,29 @@
+FROM golang:1.24.4-alpine AS builder
+
+RUN apk add --no-cache gcc g++ make sqlite-dev
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY pkg/whatsapp/client/*.go ./client/
+WORKDIR /app/client
+
+ENV CGO_ENABLED=1
+RUN go build -o /zap-client .
+
+# =============================
+# Final image
+# =============================
+FROM alpine:3.19
+WORKDIR /app
+
+RUN apk add --no-cache sqlite-libs
+
+COPY --from=builder /zap-client .
+
+ENV PHONE_NUMBER=default
+
+EXPOSE 8080
+ENTRYPOINT ["/app/zap-client"]

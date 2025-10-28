@@ -1,0 +1,42 @@
+services:
+  dev-go-simpzap-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dev-go-simpzap-container
+    env_file:
+      - .env.dev
+    ports:
+      - "3372:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  homolog-go-simpzap-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: homolog-go-simpzap-container
+    env_file:
+      - .env.homolog
+    ports:
+      - "6672:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  prod-go-simpzap-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dev-go-simpzap-container
+    env_file:
+      - .env.prod
+    ports:
+      - "3372:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  zap-client:
+    build:
+      context: .
+      dockerfile: client.Dockerfile
+    image: zap-client:latest
