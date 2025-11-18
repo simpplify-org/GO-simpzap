@@ -11,7 +11,10 @@ import (
 func main() {
 	ctx := context.Background()
 
-	svc := app.NewWhatsAppService(ctx)
+	//TODO conectar ao banco de dados
+	//TODO conecta ao repositorio com a conexao do banco
+
+	svc := app.NewWhatsAppService(ctx) //add adiciona o repositorio do webhook
 	h := app.NewWhatsAppHandler(svc)
 
 	e := echo.New()

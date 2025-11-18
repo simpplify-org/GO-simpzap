@@ -7,15 +7,15 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY pkg/whatsapp/client/*.go ./client/
-WORKDIR /app/client
+COPY . .
 
+WORKDIR /app/cmd/client
 ENV CGO_ENABLED=1
 RUN go build -o /zap-client .
 
-# =============================
-# Final image
-# =============================
+# ------------------------
+# Final
+# ------------------------
 FROM alpine:3.19
 WORKDIR /app
 

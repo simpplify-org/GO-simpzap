@@ -2,91 +2,29 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/websocket"
-	"github.com/skip2/go-qrcode"
+	"github.com/simpplify-org/GO-simpzap/cmd/client/clientservice"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	_ "github.com/mattn/go-sqlite3"
-	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/proto/waE2E"
-	"go.mau.fi/whatsmeow/store/sqlstore"
-	"go.mau.fi/whatsmeow/types"
-	"go.mau.fi/whatsmeow/types/events"
-	waLog "go.mau.fi/whatsmeow/util/log"
-	"google.golang.org/protobuf/proto"
+	"github.com/gorilla/websocket"
 )
 
 var (
-	client      *whatsmeow.Client
 	ctx         = context.Background()
 	phoneNumber = os.Getenv("PHONE_NUMBER")
+	service     *clientservice.WhatsAppService
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Handler de eventos com logs
-func eventHandler(evt interface{}) {
-	switch v := evt.(type) {
-	case *events.Message:
-		fmt.Printf("📩 [%s] %s\n", v.Info.Sender.User, v.Message.GetConversation())
-	case *events.Connected:
-		log.Println("✅ WhatsApp conectado com sucesso!")
-	case *events.Disconnected:
-		log.Println("❌ WhatsApp desconectado!")
-	case *events.StreamReplaced:
-		log.Println("⚠️ Sessão substituída em outro dispositivo.")
-	case *events.LoggedOut:
-		log.Println("🚪 Logout realizado — sessão expirada.")
-	default:
-		// Log de debug para eventos desconhecidos
-		log.Printf("🌀 Evento: %+v\n", v)
-	}
-}
-
-func initClient() (*whatsmeow.Client, error) {
-	if client != nil {
-		return client, nil
-	}
-
-	dbLog := waLog.Stdout("Database", "DEBUG", true)
-	container, err := sqlstore.New(ctx, "sqlite3", "file:device.db?_foreign_keys=on", dbLog)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao abrir sqlstore: %w", err)
-	}
-
-	jid, err := types.ParseJID(phoneNumber + types.DefaultUserServer)
-	if err != nil {
-		return nil, fmt.Errorf("JID inválido: %w", err)
-	}
-
-	deviceStore, err := container.GetDevice(ctx, jid)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao obter device: %w", err)
-	}
-	if deviceStore == nil {
-		deviceStore, err = container.GetFirstDevice(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("erro ao criar device: %w", err)
-		}
-	}
-
-	clientLog := waLog.Stdout("Client", "DEBUG", true)
-	client = whatsmeow.NewClient(deviceStore, clientLog)
-	client.AddEventHandler(eventHandler)
-
-	return client, nil
-}
-
-// connect/ws → mantém o socket aberto para exibir QR e status
+// handleConnectWS → mantém o socket aberto para exibir QR e status
 func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -95,18 +33,21 @@ func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	c, err := initClient()
-	if err != nil {
-		conn.WriteJSON(map[string]string{"error": err.Error()})
+	if service == nil {
+		conn.WriteJSON(map[string]string{"error": "Serviço WhatsApp não inicializado"})
 		return
 	}
 
-	if c.Store.ID == nil {
-		qrChan, _ := c.GetQRChannel(ctx)
+	if !service.HasID() {
+		qrChan, err := service.GetQRChannel()
+		if err != nil {
+			conn.WriteJSON(map[string]string{"error": err.Error()})
+			return
+		}
 
 		go func() {
 			// mantém o client conectado
-			if err := c.Connect(); err != nil {
+			if err := service.Connect(); err != nil {
 				conn.WriteJSON(map[string]string{"error": err.Error()})
 				return
 			}
@@ -115,11 +56,15 @@ func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 		for evt := range qrChan {
 			switch evt.Event {
 			case "code":
-				img, _ := qrcode.Encode(evt.Code, qrcode.Medium, 180)
-				encoded := base64.StdEncoding.EncodeToString(img)
+				dataURL, err := clientservice.EncodeQRToDataURL(evt.Code)
+				if err != nil {
+					log.Printf("Erro ao codificar QR: %v", err)
+					conn.WriteJSON(map[string]string{"error": "Erro ao gerar QR Code"})
+					return
+				}
 				conn.WriteJSON(map[string]any{
 					"event": "qr",
-					"image": "data:image/png;base64," + encoded,
+					"image": dataURL,
 				})
 			case "success":
 				conn.WriteJSON(map[string]any{"event": "success"})
@@ -128,7 +73,7 @@ func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		if err := c.Connect(); err != nil {
+		if err := service.Connect(); err != nil {
 			conn.WriteJSON(map[string]string{"error": err.Error()})
 			return
 		}
@@ -136,7 +81,7 @@ func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /send — envia para um número
+// handleSendMessage - POST /send — envia para um número
 func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	type SendRequest struct {
 		Number  string `json:"number"`
@@ -149,20 +94,14 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if client == nil || !client.IsConnected() {
+	if service == nil || !service.IsConnected() {
 		http.Error(w, "Cliente WhatsApp não conectado", http.StatusServiceUnavailable)
 		return
 	}
 
 	log.Printf("📤 Enviando mensagem para %s...\n", req.Number)
-	jid := types.NewJID(req.Number, types.DefaultUserServer)
-	msg := &waE2E.Message{
-		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-			Text: proto.String(req.Message),
-		},
-	}
 
-	resp, err := client.SendMessage(ctx, jid, msg)
+	resp, err := service.SendMessage(req.Number, req.Message)
 	if err != nil {
 		log.Printf("❌ Erro ao enviar para %s: %v\n", req.Number, err)
 		http.Error(w, fmt.Sprintf("Erro ao enviar: %v", err), http.StatusInternalServerError)
@@ -176,7 +115,7 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /send/many — envia mesma mensagem para vários números
+// handleSendManyMessages - POST /send/many — envia mesma mensagem para vários números
 func handleSendManyMessages(w http.ResponseWriter, r *http.Request) {
 	type SendManyRequest struct {
 		Numbers []string `json:"numbers"`
@@ -194,7 +133,7 @@ func handleSendManyMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if client == nil || !client.IsConnected() {
+	if service == nil || !service.IsConnected() {
 		http.Error(w, "Cliente WhatsApp não conectado", http.StatusServiceUnavailable)
 		return
 	}
@@ -207,14 +146,8 @@ func handleSendManyMessages(w http.ResponseWriter, r *http.Request) {
 	results := make([]SendResult, 0, len(req.Numbers))
 	for _, number := range req.Numbers {
 		log.Printf("📤 Enviando mensagem para %s...\n", number)
-		jid := types.NewJID(number, types.DefaultUserServer)
-		msg := &waE2E.Message{
-			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
-				Text: proto.String(req.Message),
-			},
-		}
 
-		resp, err := client.SendMessage(ctx, jid, msg)
+		resp, err := service.SendMessage(number, req.Message)
 		if err != nil {
 			log.Printf("❌ Erro ao enviar para %s: %v\n", number, err)
 			results = append(results, SendResult{Number: number, Error: err.Error()})
@@ -232,11 +165,83 @@ func handleSendManyMessages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleRegisterWebhook - POST /webhook/register — registra um webhook de um numero
+func handleRegisterWebhook(w http.ResponseWriter, r *http.Request) {
+	type Req struct {
+		Number      string `json:"number"`
+		Phrase      string `json:"phrase"`
+		CallbackURL string `json:"callback_url"`
+	}
+
+	var req Req
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "payload inválido", http.StatusBadRequest)
+		return
+	}
+
+	if service == nil {
+		http.Error(w, "Serviço WhatsApp não inicializado", http.StatusServiceUnavailable)
+		return
+	}
+
+	service.RegisterWebhook(req.Number, req.Phrase, req.CallbackURL)
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "registered",
+	})
+}
+
+// handleListWebhooks - POST /webhook/list — lista os webhook
+func handleListWebhooks(w http.ResponseWriter, r *http.Request) {
+	if service == nil {
+		http.Error(w, "Serviço WhatsApp não inicializado", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(service.ListWebhooks())
+}
+
+// handleDeleteWebhook - POST /webhook/delete — deleta um webhook de um numero
+func handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	type Req struct {
+		Number      string `json:"number"`
+		Phrase      string `json:"phrase"`
+		CallbackURL string `json:"callback_url"`
+	}
+
+	var req Req
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "payload inválido", http.StatusBadRequest)
+		return
+	}
+
+	if service == nil {
+		http.Error(w, "Serviço WhatsApp não inicializado", http.StatusServiceUnavailable)
+		return
+	}
+
+	service.DeleteWebhook(req.Number, req.Phrase, req.CallbackURL)
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "deleted",
+	})
+}
+
 // main com logs e shutdown gracioso
 func main() {
+	var err error
+	service, err = clientservice.NewWhatsAppService(ctx, phoneNumber)
+	if err != nil {
+		log.Fatalf("Erro ao inicializar o serviço client WhatsApp: %v", err)
+	}
+
 	http.HandleFunc("/connect/ws", handleConnectWS)
 	http.HandleFunc("/send", handleSendMessage)
 	http.HandleFunc("/send/many", handleSendManyMessages)
+	http.HandleFunc("/webhook/register", handleRegisterWebhook)
+	http.HandleFunc("/webhook/list", handleListWebhooks)
+	http.HandleFunc("/webhook/delete", handleDeleteWebhook)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "ok")
@@ -257,7 +262,7 @@ func main() {
 	<-c
 
 	log.Println("🧹 Encerrando cliente WhatsApp...")
-	if client != nil {
-		client.Disconnect()
+	if service != nil {
+		service.Disconnect()
 	}
 }

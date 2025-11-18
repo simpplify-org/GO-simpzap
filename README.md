@@ -2,10 +2,10 @@
 
 Este projeto é uma API em Go que integra o WhatsApp via biblioteca [Whatsmeow](https://github.com/tulir/whatsmeow), utilizando WebSocket para comunicação com o cliente. Ele permite:
 
-- 📤 Enviar mensagens via WhatsApp
-- 🔄 Manter sessão ativa com reconexão automática
-- 🔐 Gerenciar autenticação por QR Code via WebSocket
-- 🧠 Persistência de sessão com SQLite
+- Enviar mensagens via WhatsApp
+- Manter sessão ativa através de containers do docker com identificador usando o numero de telefone.
+- Conectar ao container do docker para enviar mensagens atraves do proxy do servidor.
+- Persistência de sessão individual para cara numero com o SQLite.
 
 ---
 
@@ -19,19 +19,19 @@ Este projeto é uma API em Go que integra o WhatsApp via biblioteca [Whatsmeow](
 
 ---
 
-## 🛠️ Como rodar
+## Como rodar
 
 ### Pré-requisitos
 
-- Go 1.20+
+- Go 1.24+
 - SQLite3
-- Docker (opcional)
+- Docker 
 
 ### 1. Clonar o repositório:
 
 ```bash
-git clone https://github.com/seu-usuario/seu-repo.git
-cd seu-repo
+git clone https://github.com/simpplify-org/GO-simpzap.git
+cd GO-simpzap
 ```
 
 ### 2. Instale as dependências:
@@ -54,8 +54,46 @@ ou
 make run
 ```
 
-Acesse `ws://localhost:8080/ws/whatsapp` via WebSocket.
+### 1. Criar device usando o numero de telefone:
+Crie um device por meio de `http://localhost:8080/create` com POST.
 
+```json
+{
+  "number" : "551199999999"
+}
+```
+---
+
+### 2. Conectar o telefone usando o qr code
+Acesse `ws://localhost:8080/device/{551199999999}/connect/ws` via WebSocket.
+Esta rota retornara o qrcode para ser scaneado e conectar com o dispositivo.
+```json
+{
+    "event": "qr",
+    "image": "data:image/png;base64,{base64 encoded image}"
+}
+```
+
+### 3. Envie mensagen para outro numero utilizando o device que scaneou o qr code como emitente.
+Acesse `http://localhost:8080/device/{551199999999}/send` via POST.  
+Esta rota retornará o qrcode para ser scaneado e conectar com o dispositivo.  
+```json
+{
+    "number": "5511999999992",
+    "message": "Olá, tudo bem ?"
+}
+```
+---
+
+### 4. Envie mensagen para outro numero utilizando o device que scaneou o qr code como emitente.
+Acesse `http://localhost:8080/device/{551199999999}/send/many` via POST.  
+Esta rota retornará o qrcode para ser scaneado e conectar com o dispositivo.
+```json
+{
+    "numbers": ["5511999999992", "5511999999993"],
+    "message": "Olá, tudo bem ?"
+}
+```
 ---
 
 ## 📦 Docker
