@@ -26,10 +26,18 @@ func NewZapPkg() *ZapPkg {
 		log.Fatal("Erro ao iniciar docker manager: ", err)
 	}
 
+	latestTag, err := dm.GetLatestImageTag("zap-client")
+	if err != nil {
+		fmt.Printf("[WARN] Não foi possível detectar versão mais recente, usando latest")
+		latestTag = "latest"
+	}
+	imageFull := fmt.Sprintf("%s:%s", "zap-client", latestTag)
+	fmt.Println("Docker manager iniciado com imagem: ", imageFull)
+
 	return &ZapPkg{
 		dockerMgr:   dm,
 		devices:     make(map[string]*ClientContainer),
-		clientImage: "zap-client:latest",
+		clientImage: imageFull,
 	}
 }
 

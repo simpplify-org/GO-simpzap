@@ -4,12 +4,12 @@ RUN apk add --no-cache gcc g++ make sqlite-dev
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+COPY ../go.mod go.sum ./
 RUN go mod download
 
-COPY . .
+COPY client/ ./client/
+WORKDIR /app/client
 
-WORKDIR /app/cmd/client
 ENV CGO_ENABLED=1
 RUN go build -o /zap-client .
 

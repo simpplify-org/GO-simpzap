@@ -6,7 +6,9 @@ import (
 	"github.com/fsouza/go-dockerclient"
 	"log"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -19,6 +21,7 @@ type ClientContainer struct {
 	Host     string
 	Port     int
 	Endpoint string // http://host:port
+	ImageTag string
 }
 
 func NewDockerManager() (*DockerManager, error) {
@@ -98,6 +101,7 @@ func (dm *DockerManager) StartContainer(ctx context.Context, image, namePrefix s
 		Host:     host,
 		Port:     hostPort,
 		Endpoint: endpoint,
+		ImageTag: extractTag(image),
 	}, nil
 }
 
@@ -139,6 +143,7 @@ func (dm *DockerManager) FindContainerByLabel(ctx context.Context, labelKey, lab
 		Host:     host,
 		Port:     port,
 		Endpoint: fmt.Sprintf("http://%s:%d", host, port),
+		ImageTag: extractTag(inspect.Config.Image),
 	}, nil
 }
 func (dm *DockerManager) StopContainer(ctx context.Context, id string) error {
@@ -158,6 +163,34 @@ func (dm *DockerManager) RemoveContainer(ctx context.Context, id string) error {
 		return err
 	}
 	return nil
+}
+
+// GetLatestImageTag retorna a tag mais recente encontrada localmente para uma imagem
+func (dm *DockerManager) GetLatestImageTag(imageName string) (string, error) {
+	images, err := dm.client.ListImages(docker.ListImagesOptions{})
+	if err != nil {
+		return "", fmt.Errorf("erro ao listar imagens locais: %w", err)
+	}
+
+	var tags []string
+
+	for _, img := range images {
+		for _, tag := range img.RepoTags {
+			if strings.HasPrefix(tag, imageName+":") {
+				parts := strings.Split(tag, ":")
+				if len(parts) == 2 {
+					tags = append(tags, parts[1])
+				}
+			}
+		}
+	}
+
+	if len(tags) == 0 {
+		return "", fmt.Errorf("nenhuma tag encontrada localmente para %s", imageName)
+	}
+
+	sort.Strings(tags)
+	return tags[len(tags)-1], nil
 }
 
 func (dm *DockerManager) getDockerHost() string {

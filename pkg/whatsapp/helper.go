@@ -55,3 +55,11 @@ func getFreePort() (int, error) {
 	defer listener.Close()
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
+
+func extractTag(image string) string {
+	parts := strings.Split(image, ":")
+	if len(parts) == 2 {
+		return parts[1] // retorna "v3", "latest", etc
+	}
+	return "latest"
+}

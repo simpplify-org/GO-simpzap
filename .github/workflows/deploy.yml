@@ -11,9 +11,30 @@ jobs:
     if: github.ref_name == 'develop'
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Conectar ao EC2 e Atualizar o Container dev
+      - name: Mostrar tag gerada
+        run: echo "IMAGE_TAG=${{ needs.generate-tag.outputs.tag }}"
+
+      - name: Deploy LOCAL (ACT)
+        if: env.ACT == 'true'
+        run: |
+          echo ">>> Rodando deploy local (ACT)..."
+          
+          echo ">>> Atualizando imagem zap-client..."
+            IMAGE_TAG=$(date +"%Y%m%d%H%M%S") docker compose build zap-client
+          
+          echo ">>> Subindo container..."
+            docker compose build dev-go-simpzap-container
+            docker compose up -d dev-go-simpzap-container
+          
+          echo ">>> Limpando imagens antigas..."
+          docker image prune -f
+          
+          echo ">>> Deploy dev concluído!"
+
+      - name: Deploy REMOTO (EC2)
+        if: env.ACT != 'true'
         env:
           EC2_USER: ubuntu
           EC2_HOST: ${{ secrets.EC2_PUBLIC_IP_DEV_HML }}
@@ -31,14 +52,14 @@ jobs:
             git fetch --all
             git checkout develop
             git pull origin develop
-
+          
             echo ">>> Atualizando imagem zap-client..."
-            docker compose build --no-cache zap-client
-
+            IMAGE_TAG=$(date +"%Y%m%d%H%M%S") docker compose build zap-client
+          
             echo ">>> Subindo container..."
             docker compose build dev-go-simpzap-container
             docker compose up -d dev-go-simpzap-container
-
+          
             echo ">>> Limpando imagens antigas..."
             docker image prune -f
 
@@ -75,7 +96,7 @@ jobs:
             git pull origin homolog
 
             echo ">>> Atualizando imagem zap-client..."
-            docker compose build --no-cache zap-client
+            IMAGE_TAG=$(date +"%Y%m%d%H%M%S") docker compose build zap-client
 
             echo ">>> Subindo container..."
             docker compose build homolog-go-simpzap-container
@@ -117,7 +138,7 @@ jobs:
             git pull origin main
           
             echo ">>> Atualizando imagem zap-client..."
-            docker compose build --no-cache zap-client
+            IMAGE_TAG=$(date +"%Y%m%d%H%M%S") docker compose build zap-client
 
             echo ">>> Subindo container..."
             docker compose build prod-go-simpzap-container

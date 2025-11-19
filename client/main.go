@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/simpplify-org/GO-simpzap/cmd/client/clientservice"
+	"github.com/simpplify-org/GO-simpzap/client/clientservice"
 	"log"
 	"net/http"
 	"os"
@@ -171,6 +171,8 @@ func handleRegisterWebhook(w http.ResponseWriter, r *http.Request) {
 		Number      string `json:"number"`
 		Phrase      string `json:"phrase"`
 		CallbackURL string `json:"callback_url"`
+		UrlMethod   string `json:"url_method"`
+		Body        string `json:"body"`
 	}
 
 	var req Req
@@ -184,7 +186,7 @@ func handleRegisterWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	service.RegisterWebhook(req.Number, req.Phrase, req.CallbackURL)
+	service.RegisterWebhook(req.Number, req.Phrase, req.CallbackURL, req.UrlMethod, req.Body)
 
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "registered",
@@ -250,13 +252,12 @@ func main() {
 	server := &http.Server{Addr: ":8080"}
 
 	go func() {
-		log.Println("🚀 Servidor HTTP iniciado em http://localhost:8080")
+		log.Println("Servidor HTTP iniciado em http://localhost:8080")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Erro no servidor: %v", err)
 		}
 	}()
 
-	// Graceful shutdown
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	<-c
