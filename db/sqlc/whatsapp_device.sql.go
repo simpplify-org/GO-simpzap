@@ -81,37 +81,6 @@ func (q *Queries) SoftDeleteDevice(ctx context.Context, number string) error {
 	return err
 }
 
-const updateDevice = `-- name: UpdateDevice :exec
-UPDATE whatsapp_device
-SET
-    container_id = $2,
-    endpoint = $3,
-    version = $4,
-    updated_at = NOW(),
-    updated_who = $5
-WHERE number = $1
-  AND active = TRUE
-`
-
-type UpdateDeviceParams struct {
-	Number      string         `json:"number"`
-	ContainerID string         `json:"container_id"`
-	Endpoint    string         `json:"endpoint"`
-	Version     sql.NullString `json:"version"`
-	UpdatedWho  sql.NullString `json:"updated_who"`
-}
-
-func (q *Queries) UpdateDevice(ctx context.Context, arg UpdateDeviceParams) error {
-	_, err := q.db.ExecContext(ctx, updateDevice,
-		arg.Number,
-		arg.ContainerID,
-		arg.Endpoint,
-		arg.Version,
-		arg.UpdatedWho,
-	)
-	return err
-}
-
 const upsertDevice = `-- name: UpsertDevice :one
 INSERT INTO whatsapp_device (number, container_id, endpoint, version, updated_who)
 VALUES ($1, $2, $3, $4, $5)

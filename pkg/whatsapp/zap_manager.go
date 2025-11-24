@@ -111,14 +111,37 @@ func (s *ZapPkg) RemoveDevice(ctx context.Context, deviceID string) error {
 	return nil
 }
 
-// GetDeviceEndpoint retorna endpoint do container do device
+// GetDeviceEndpoint retorna o endpoint do device
+// Ele tenta:
+// 1) Buscar no cache
+// 2) Buscar no Docker (containers existentes)
+// 3) Se achar no docker, atualiza o cache
+// 4) Se não achar, retorna erro explícito
 func (s *ZapPkg) GetDeviceEndpoint(deviceID string) (string, error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	if c, ok := s.devices[deviceID]; ok {
+		s.mu.RUnlock()
 		return c.Endpoint, nil
 	}
-	return "", errors.New("device não iniciado")
+	s.mu.RUnlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	existing, err := s.dockerMgr.FindContainerByLabel(ctx, "phone_number", deviceID)
+	if err != nil {
+		return "", fmt.Errorf("erro ao buscar device no docker: %w", err)
+	}
+
+	if existing == nil {
+		return "", fmt.Errorf("device '%s' não encontrado", deviceID)
+	}
+
+	s.mu.Lock()
+	s.devices[deviceID] = existing
+	s.mu.Unlock()
+
+	return existing.Endpoint, nil
 }
 
 // ProxyHandler gera um http.Handler que roteia para o container do device.
@@ -140,12 +163,8 @@ func (s *ZapPkg) ProxyHandler() http.Handler {
 		// garante que o device exista
 		endpoint, err := s.GetDeviceEndpoint(deviceID)
 		if err != nil {
-			ctx := r.Context()
-			if _, cerr := s.CreateDevice(ctx, deviceID); cerr != nil {
-				http.Error(w, "erro ao criar device: "+cerr.Error(), http.StatusInternalServerError)
-				return
-			}
-			endpoint, _ = s.GetDeviceEndpoint(deviceID)
+			http.Error(w, "device não encontrado: "+err.Error(), http.StatusNotFound)
+			return
 		}
 
 		target, err := url.Parse(endpoint)

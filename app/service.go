@@ -15,16 +15,16 @@ import (
 
 type WhatsAppServiceInterface interface {
 	// Device Management
-	CreateDevice(number string) (CreateDeviceResponse, error)
-	RemoveDevice(number string) error
+	CreateDeviceService(number string) (CreateDeviceResponse, error)
+	RemoveDeviceService(number string) error
 
 	// Proxy (container child)
-	ProxyHandler() http.Handler
+	ProxyService() http.Handler
 
 	// Logs
-	SaveEventLog(arg InsertEventLogDTO) error
-	ListLogs(ctx context.Context, limit int32) ([]WhatsappEventLogResponse, error)
-	ListLogsByNumber(ctx context.Context, arg db.ListLogsByNumberParams) ([]WhatsappEventLogResponse, error)
+	SaveEventLogService(arg InsertEventLogDTO) error
+	ListLogsService(ctx context.Context, limit int32) ([]WhatsappEventLogResponse, error)
+	ListLogsByNumberService(ctx context.Context, arg db.ListLogsByNumberParams) ([]WhatsappEventLogResponse, error)
 }
 
 type WhatsAppService struct {
@@ -41,18 +41,12 @@ func NewWhatsAppService(ctx context.Context, repo RepositoryInterface) *WhatsApp
 	}
 }
 
-func (s *WhatsAppService) CreateDevice(number string) (CreateDeviceResponse, error) {
+func (s *WhatsAppService) CreateDeviceService(number string) (CreateDeviceResponse, error) {
 	cc, err := s.Zap.CreateDevice(s.Ctx, number)
 	if err != nil {
 		return CreateDeviceResponse{}, err
 	}
-	response := CreateDeviceResponse{
-		Status:   "created",
-		Endpoint: cc.Endpoint,
-		ID:       cc.ID,
-		Version:  cc.ImageTag,
-	}
-	ID, err := s.repo.UpsertDevice(s.Ctx, db.UpsertDeviceParams{
+	ID, err := s.repo.UpsertDeviceRepository(s.Ctx, db.UpsertDeviceParams{
 		Number:      number,
 		ContainerID: cc.ID,
 		Endpoint:    cc.Endpoint,
@@ -62,21 +56,31 @@ func (s *WhatsAppService) CreateDevice(number string) (CreateDeviceResponse, err
 			Valid:  true,
 		},
 	})
+	response := CreateDeviceResponse{
+		Status:      "created",
+		Endpoint:    cc.Endpoint,
+		IDContainer: cc.ID,
+		IDDevice:    ID,
+		Version:     cc.ImageTag,
+	}
 	if err != nil {
 		return CreateDeviceResponse{}, err
 	}
 
-	webhook, err := s.repo.ListWebhooksByDevice(s.Ctx, ID)
+	webhook, err := s.repo.ListWebhooksByDeviceRepository(s.Ctx, ID)
 	if err != nil {
 		return CreateDeviceResponse{}, err
 	}
 	err = s.Zap.PushWebhooks(s.Ctx, cc, ToWebhookPKG(webhook))
+	if err != nil {
+		return CreateDeviceResponse{}, err
+	}
 
 	return response, nil
 }
 
-func (s *WhatsAppService) RemoveDevice(number string) error {
-	err := s.repo.SoftDeleteDevice(s.Ctx, number)
+func (s *WhatsAppService) RemoveDeviceService(number string) error {
+	err := s.repo.SoftDeleteDeviceRepository(s.Ctx, number)
 	if err != nil {
 		return err
 	}
@@ -84,7 +88,7 @@ func (s *WhatsAppService) RemoveDevice(number string) error {
 	return s.Zap.RemoveDevice(s.Ctx, number)
 }
 
-func (s *WhatsAppService) ProxyHandler() http.Handler {
+func (s *WhatsAppService) ProxyService() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/device/", func(w http.ResponseWriter, r *http.Request) {
@@ -119,13 +123,13 @@ func (s *WhatsAppService) ProxyHandler() http.Handler {
 			if req.Method == "" {
 				req.Method = "POST"
 			}
-			deviceID, err := s.repo.GetDevice(r.Context(), device)
+			deviceID, err := s.repo.GetDeviceRepository(r.Context(), device)
 			if err != nil {
 				http.Error(w, "erro ao registrar webhook: "+err.Error(), 500)
 				return
 			}
 
-			err = s.repo.InsertWebhook(r.Context(), db.InsertWebhookParams{
+			err = s.repo.InsertWebhookRepository(r.Context(), db.InsertWebhookParams{
 				DeviceID:  deviceID.ID,
 				Number:    req.Number,
 				Phrase:    req.Phrase,
@@ -152,8 +156,8 @@ func (s *WhatsAppService) ProxyHandler() http.Handler {
 	return mux
 }
 
-func (s *WhatsAppService) SaveEventLog(arg InsertEventLogDTO) error {
-	return s.repo.InsertEventLog(s.Ctx, db.InsertEventLogParams{
+func (s *WhatsAppService) SaveEventLogService(arg InsertEventLogDTO) error {
+	return s.repo.InsertEventLogRepository(s.Ctx, db.InsertEventLogParams{
 		Number:      arg.Number,
 		Ip:          sql.NullString{String: arg.Ip, Valid: true},
 		Method:      sql.NullString{String: arg.Method, Valid: true},
@@ -164,16 +168,16 @@ func (s *WhatsAppService) SaveEventLog(arg InsertEventLogDTO) error {
 	})
 }
 
-func (s *WhatsAppService) ListLogs(ctx context.Context, limit int32) ([]WhatsappEventLogResponse, error) {
-	result, err := s.repo.ListLastLogs(ctx, limit)
+func (s *WhatsAppService) ListLogsService(ctx context.Context, limit int32) ([]WhatsappEventLogResponse, error) {
+	result, err := s.repo.ListLastLogsRepository(ctx, limit)
 	if err != nil {
 		return nil, err
 	}
 	return ToLogResponse(result), err
 }
 
-func (s *WhatsAppService) ListLogsByNumber(ctx context.Context, arg db.ListLogsByNumberParams) ([]WhatsappEventLogResponse, error) {
-	result, err := s.repo.ListLogsByNumber(ctx, arg)
+func (s *WhatsAppService) ListLogsByNumberService(ctx context.Context, arg db.ListLogsByNumberParams) ([]WhatsappEventLogResponse, error) {
+	result, err := s.repo.ListLogsByNumberRepository(ctx, arg)
 	if err != nil {
 		return nil, err
 	}

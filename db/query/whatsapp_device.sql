@@ -10,17 +10,6 @@ DO UPDATE SET
     updated_at = NOW()
 RETURNING id;
 
--- name: UpdateDevice :exec
-UPDATE whatsapp_device
-SET
-    container_id = $2,
-    endpoint = $3,
-    version = $4,
-    updated_at = NOW(),
-    updated_who = $5
-WHERE number = $1
-  AND active = TRUE;
-
 -- name: SoftDeleteDevice :exec
 UPDATE whatsapp_device
 SET active = FALSE

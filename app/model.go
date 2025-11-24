@@ -16,10 +16,11 @@ type DeleteDeviceRequest struct {
 }
 
 type CreateDeviceResponse struct {
-	Status   string `json:"status"`
-	Endpoint string `json:"endpoint"`
-	ID       string `json:"id"`
-	Version  string `json:"version"`
+	Status      string `json:"status"`
+	Endpoint    string `json:"endpoint"`
+	IDContainer string `json:"id_container"`
+	IDDevice    int64  `json:"id_device"`
+	Version     string `json:"version"`
 }
 
 type DeleteDeviceResponse struct {

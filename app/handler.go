@@ -15,11 +15,11 @@ import (
 type WhatsAppHandlerInterface interface {
 	RegisterRoutes(e *echo.Echo) //CHAMADO INTERNAMENTE SOMENTE
 
-	CreateDevice(c echo.Context) error
-	DeleteDevice(c echo.Context) error
+	CreateDeviceHandler(c echo.Context) error
+	DeleteDeviceHandler(c echo.Context) error
 
-	ListLogs(c echo.Context) error
-	ListLogsByNumber(c echo.Context) error
+	ListLogsHandler(c echo.Context) error
+	ListLogsByNumberHandler(c echo.Context) error
 
 	EventLoggerMiddleware(next echo.HandlerFunc) echo.HandlerFunc //CHAMADO INTERNAMENTE SOMENTE
 }
@@ -34,15 +34,15 @@ func NewWhatsAppHandler(svc *WhatsAppService) *WhatsAppHandler {
 
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.Use(h.EventLoggerMiddleware)
-	e.POST("/create", h.CreateDevice)
-	e.DELETE("/delete", h.DeleteDevice)
-	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyHandler()))
+	e.POST("/create", h.CreateDeviceHandler)
+	e.DELETE("/delete", h.DeleteDeviceHandler)
+	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyService()))
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
-	e.GET("/logs", h.ListLogs)
-	e.GET("/logs/number", h.ListLogsByNumber)
+	e.GET("/logs", h.ListLogsHandler)
+	e.GET("/logs/number", h.ListLogsByNumberHandler)
 }
 
-func (h *WhatsAppHandler) CreateDevice(c echo.Context) error {
+func (h *WhatsAppHandler) CreateDeviceHandler(c echo.Context) error {
 	var req CreateDeviceRequest
 	if err := c.Bind(&req); err != nil || req.Number == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -50,7 +50,7 @@ func (h *WhatsAppHandler) CreateDevice(c echo.Context) error {
 		})
 	}
 
-	resp, err := h.Service.CreateDevice(req.Number)
+	resp, err := h.Service.CreateDeviceService(req.Number)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
@@ -59,13 +59,13 @@ func (h *WhatsAppHandler) CreateDevice(c echo.Context) error {
 	return c.JSON(http.StatusCreated, resp)
 }
 
-func (h *WhatsAppHandler) DeleteDevice(c echo.Context) error {
+func (h *WhatsAppHandler) DeleteDeviceHandler(c echo.Context) error {
 	var req DeleteDeviceRequest
 	if err := c.Bind(&req); err != nil || req.Number == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "JSON inválido"})
 	}
 
-	if err := h.Service.RemoveDevice(req.Number); err != nil {
+	if err := h.Service.RemoveDeviceService(req.Number); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
@@ -73,7 +73,7 @@ func (h *WhatsAppHandler) DeleteDevice(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *WhatsAppHandler) ListLogs(c echo.Context) error {
+func (h *WhatsAppHandler) ListLogsHandler(c echo.Context) error {
 	limitStr := c.QueryParam("limit")
 	if limitStr == "" {
 		limitStr = "10"
@@ -86,7 +86,7 @@ func (h *WhatsAppHandler) ListLogs(c echo.Context) error {
 	}
 
 	limit := int32(limitInt)
-	result, err := h.Service.ListLogs(c.Request().Context(), limit)
+	result, err := h.Service.ListLogsService(c.Request().Context(), limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -94,12 +94,12 @@ func (h *WhatsAppHandler) ListLogs(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-func (h *WhatsAppHandler) ListLogsByNumber(c echo.Context) error {
+func (h *WhatsAppHandler) ListLogsByNumberHandler(c echo.Context) error {
 	var req db.ListLogsByNumberParams
 	if err := c.Bind(&req); err != nil || req.Number == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "JSON inválido"})
 	}
-	result, err := h.Service.ListLogsByNumber(c.Request().Context(), req)
+	result, err := h.Service.ListLogsByNumberService(c.Request().Context(), req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -134,7 +134,7 @@ func (h *WhatsAppHandler) EventLoggerMiddleware(next echo.HandlerFunc) echo.Hand
 			RequestBody: []byte(fmt.Sprintf("%q", raw)),
 		}
 
-		if saveErr := h.Service.SaveEventLog(log); saveErr != nil {
+		if saveErr := h.Service.SaveEventLogService(log); saveErr != nil {
 			c.Logger().Error("Erro ao salvar logs:", saveErr)
 		}
 

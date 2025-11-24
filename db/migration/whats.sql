@@ -38,4 +38,4 @@ CREATE TABLE IF NOT EXISTS whatsapp_event_log (
 
 ALTER TABLE whatsapp_device_webhook
     ADD CONSTRAINT whatsapp_device_webhook_unique_rule
-        UNIQUE (device_id, number, phrase, url, url_method, body);
+    UNIQUE (device_id, number, phrase, url, url_method, body);
