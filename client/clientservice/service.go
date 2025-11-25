@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/skip2/go-qrcode"
 
@@ -27,6 +28,8 @@ import (
 type WebhookRule struct {
 	Phrase      string
 	CallbackURL string
+	UrlMethod   string
+	Body        string
 }
 
 // WhatsAppService encapsula a lógica de conexão e interação com o WhatsApp.
@@ -179,31 +182,29 @@ func (s *WhatsAppService) handleMessageEvent(v *events.Message) {
 	if ok {
 		for _, rule := range rules {
 			if rule.Phrase == text {
-				go s.dispatchWebhook(rule, number, text)
+				go s.dispatchWebhook(rule, number)
 			}
 		}
 	}
 }
 
 // dispatchWebhook envia a requisição para o URL do webhook.
-func (s *WhatsAppService) dispatchWebhook(rule WebhookRule, number, text string) {
-	body := map[string]string{
-		"number":  number,
-		"message": text,
-	}
-
-	payload, err := json.Marshal(body)
+func (s *WhatsAppService) dispatchWebhook(rule WebhookRule, number string) {
+	payload := []byte(rule.Body)
+	s.sendInternalMessage(number, "Solicitação recebida, aguarde...")
+	req, err := http.NewRequest(rule.UrlMethod, rule.CallbackURL, bytes.NewBuffer(payload))
 	if err != nil {
-		log.Printf("Erro ao serializar payload do webhook: %v", err)
+		log.Printf("Erro ao criar request para webhook %s: %v", rule.CallbackURL, err)
+		s.sendInternalMessage(number, "Erro ao criar requisição: "+rule.CallbackURL)
 		return
 	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 20 * time.Second}
 
-	s.sendInternalMessage(number, "Solicitação recebida, aguarde...")
-
-	resp, err := http.Post(rule.CallbackURL, "application/json", bytes.NewBuffer(payload))
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Erro ao chamar webhook %s: %v", rule.CallbackURL, err)
-		s.sendInternalMessage(number, "Não foi possível se comunicar com o servidor intermediário: "+rule.CallbackURL)
+		s.sendInternalMessage(number, "Não foi possível se comunicar com o servidor: "+rule.CallbackURL)
 		return
 	}
 	defer resp.Body.Close()
@@ -243,12 +244,14 @@ func (s *WhatsAppService) dispatchWebhook(rule WebhookRule, number, text string)
 }
 
 // RegisterWebhook adiciona uma nova regra de webhook.
-func (s *WhatsAppService) RegisterWebhook(number, phrase, callbackURL string) {
+func (s *WhatsAppService) RegisterWebhook(number, phrase, callbackURL, urlMethod, body string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.webhooks[number] = append(s.webhooks[number], WebhookRule{
 		Phrase:      phrase,
 		CallbackURL: callbackURL,
+		UrlMethod:   urlMethod,
+		Body:        body,
 	})
 }
 
