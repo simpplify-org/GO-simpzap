@@ -121,6 +121,11 @@ func (dm *DockerManager) FindContainerByLabel(ctx context.Context, labelKey, lab
 	}
 
 	c := containers[0]
+
+	if c.State == "removing" {
+		return nil, nil
+	}
+
 	if c.State != "running" {
 		if err := dm.client.StartContainer(c.ID, nil); err != nil {
 			return nil, fmt.Errorf("erro ao iniciar container existente %s: %w", c.ID, err)

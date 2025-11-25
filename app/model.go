@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type CreateDeviceRequest struct {
+type DeviceRequest struct {
 	Number string `json:"number" validate:"required"`
 }
 
@@ -15,12 +15,13 @@ type DeleteDeviceRequest struct {
 	Number string `json:"number" validate:"required"`
 }
 
-type CreateDeviceResponse struct {
-	Status      string `json:"status"`
-	Endpoint    string `json:"endpoint"`
-	IDContainer string `json:"id_container"`
-	IDDevice    int64  `json:"id_device"`
-	Version     string `json:"version"`
+type DeviceResponse struct {
+	Status        string `json:"status"`
+	Endpoint      string `json:"endpoint"`
+	IDContainer   string `json:"id_container"`
+	IDDevice      int64  `json:"id_device"`
+	Version       string `json:"version"`
+	VersionServer string `json:"version_server"`
 }
 
 type DeleteDeviceResponse struct {

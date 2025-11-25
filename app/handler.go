@@ -35,6 +35,8 @@ func NewWhatsAppHandler(svc *WhatsAppService) *WhatsAppHandler {
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.Use(h.EventLoggerMiddleware)
 	e.POST("/create", h.CreateDeviceHandler)
+	e.PUT("/update", h.UpdateDeviceHandler)
+	e.GET("/get", h.GetDeviceHandler)
 	e.DELETE("/delete", h.DeleteDeviceHandler)
 	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyService()))
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
@@ -43,7 +45,7 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 }
 
 func (h *WhatsAppHandler) CreateDeviceHandler(c echo.Context) error {
-	var req CreateDeviceRequest
+	var req DeviceRequest
 	if err := c.Bind(&req); err != nil || req.Number == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "JSON inválido, envie {\"number\": \"5511999999999\"}",
@@ -57,6 +59,40 @@ func (h *WhatsAppHandler) CreateDeviceHandler(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusCreated, resp)
+}
+
+func (h *WhatsAppHandler) UpdateDeviceHandler(c echo.Context) error {
+	var req DeviceRequest
+	if err := c.Bind(&req); err != nil || req.Number == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "JSON inválido, envie {\"number\": \"5511999999999\"}",
+		})
+	}
+
+	resp, err := h.Service.UpdateDeviceService(req.Number)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *WhatsAppHandler) GetDeviceHandler(c echo.Context) error {
+	var req DeviceRequest
+	if err := c.Bind(&req); err != nil || req.Number == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "JSON inválido, envie {\"number\": \"5511999999999\"}",
+		})
+	}
+
+	resp, err := h.Service.GetDeviceService(req.Number)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *WhatsAppHandler) DeleteDeviceHandler(c echo.Context) error {

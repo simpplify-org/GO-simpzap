@@ -2,12 +2,12 @@ package whatsapp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -91,57 +91,77 @@ func (s *ZapPkg) CreateDevice(ctx context.Context, phoneNumber string) (*ClientC
 
 // RemoveDevice para e remove
 func (s *ZapPkg) RemoveDevice(ctx context.Context, deviceID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cc, ok := s.devices[deviceID]
-	if !ok {
-		return errors.New("device não encontrado")
+	cc, err := s.getDevice(deviceID)
+	if err != nil {
+		return err
 	}
+
+	s.mu.Lock()
+	delete(s.devices, deviceID)
+	s.mu.Unlock()
 
 	if err := s.dockerMgr.StopContainer(ctx, cc.ID); err != nil {
 		log.Printf("[Service] falha ao parar container %s: %v", cc.ID, err)
 	}
-	if err := s.dockerMgr.RemoveContainer(ctx, cc.ID); err != nil {
-		log.Printf("[Service] falha ao remover container %s: %v", cc.ID, err)
+
+	err = s.dockerMgr.RemoveContainer(ctx, cc.ID)
+	if err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "in progress") || strings.Contains(msg, "No such container") {
+			log.Printf("[Service] container %s já em remoção ou removido", cc.ID)
+		} else {
+			return fmt.Errorf("falha ao remover container %s: %w", cc.ID, err)
+		}
 	}
 
-	delete(s.devices, deviceID)
 	log.Printf("[Service] Device %s removido", deviceID)
 	return nil
 }
 
 // GetDeviceEndpoint retorna o endpoint do device
+func (s *ZapPkg) GetDeviceEndpoint(deviceID string) (string, error) {
+	cc, err := s.getDevice(deviceID)
+	if err != nil {
+		return "", nil
+	}
+	return cc.Endpoint, nil
+}
+
+// getDevice busca o device no cache ou no Docker e sempre retorna o estado real.
 // Ele tenta:
 // 1) Buscar no cache
 // 2) Buscar no Docker (containers existentes)
 // 3) Se achar no docker, atualiza o cache
 // 4) Se não achar, retorna erro explícito
-func (s *ZapPkg) GetDeviceEndpoint(deviceID string) (string, error) {
+func (s *ZapPkg) getDevice(deviceID string) (*ClientContainer, error) {
+	// Tentativa 1: cache
 	s.mu.RLock()
-	if c, ok := s.devices[deviceID]; ok {
-		s.mu.RUnlock()
-		return c.Endpoint, nil
-	}
+	cached, ok := s.devices[deviceID]
 	s.mu.RUnlock()
 
+	if ok {
+		return cached, nil
+	}
+
+	// Tentativa 2: Docker
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	existing, err := s.dockerMgr.FindContainerByLabel(ctx, "phone_number", deviceID)
 	if err != nil {
-		return "", fmt.Errorf("erro ao buscar device no docker: %w", err)
+		return nil, fmt.Errorf("erro ao buscar device no docker: %w", err)
 	}
 
 	if existing == nil {
-		return "", fmt.Errorf("device '%s' não encontrado", deviceID)
+		return nil, fmt.Errorf("device '%s' não encontrado", deviceID)
 	}
 
+	// Atualiza cache
 	s.mu.Lock()
 	s.devices[deviceID] = existing
 	s.mu.Unlock()
 
-	return existing.Endpoint, nil
+	return existing, nil
 }
 
 // ProxyHandler gera um http.Handler que roteia para o container do device.
@@ -183,4 +203,8 @@ func (s *ZapPkg) ProxyHandler() http.Handler {
 	})
 
 	return mux
+}
+
+func (s *ZapPkg) GetVersion() string {
+	return strings.TrimPrefix(s.clientImage, "zap-client:")
 }

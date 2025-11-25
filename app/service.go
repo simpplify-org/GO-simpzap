@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	db "github.com/simpplify-org/GO-simpzap/db/sqlc"
 	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
@@ -15,7 +16,9 @@ import (
 
 type WhatsAppServiceInterface interface {
 	// Device Management
-	CreateDeviceService(number string) (CreateDeviceResponse, error)
+	CreateDeviceService(number string) (DeviceResponse, error)
+	UpdateDeviceService(number string) (DeviceResponse, error)
+	GetDeviceService(number string) (DeviceResponse, error)
 	RemoveDeviceService(number string) error
 
 	// Proxy (container child)
@@ -41,10 +44,10 @@ func NewWhatsAppService(ctx context.Context, repo RepositoryInterface) *WhatsApp
 	}
 }
 
-func (s *WhatsAppService) CreateDeviceService(number string) (CreateDeviceResponse, error) {
+func (s *WhatsAppService) CreateDeviceService(number string) (DeviceResponse, error) {
 	cc, err := s.Zap.CreateDevice(s.Ctx, number)
 	if err != nil {
-		return CreateDeviceResponse{}, err
+		return DeviceResponse{}, err
 	}
 	ID, err := s.repo.UpsertDeviceRepository(s.Ctx, db.UpsertDeviceParams{
 		Number:      number,
@@ -56,31 +59,112 @@ func (s *WhatsAppService) CreateDeviceService(number string) (CreateDeviceRespon
 			Valid:  true,
 		},
 	})
-	response := CreateDeviceResponse{
-		Status:      "created",
-		Endpoint:    cc.Endpoint,
-		IDContainer: cc.ID,
-		IDDevice:    ID,
-		Version:     cc.ImageTag,
+	response := DeviceResponse{
+		Status:        "created",
+		Endpoint:      cc.Endpoint,
+		IDContainer:   cc.ID,
+		IDDevice:      ID,
+		Version:       cc.ImageTag,
+		VersionServer: s.Zap.GetVersion(),
 	}
 	if err != nil {
-		return CreateDeviceResponse{}, err
+		return DeviceResponse{}, err
 	}
 
 	webhook, err := s.repo.ListWebhooksByDeviceRepository(s.Ctx, ID)
 	if err != nil {
-		return CreateDeviceResponse{}, err
+		return DeviceResponse{}, err
 	}
 	err = s.Zap.PushWebhooks(s.Ctx, cc, ToWebhookPKG(webhook))
 	if err != nil {
-		return CreateDeviceResponse{}, err
+		return DeviceResponse{}, err
 	}
 
 	return response, nil
 }
 
+func (s *WhatsAppService) UpdateDeviceService(number string) (DeviceResponse, error) {
+	device, err := s.repo.GetDeviceRepository(s.Ctx, number)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeviceResponse{}, errors.New("device não encontrado")
+		}
+		return DeviceResponse{}, err
+	}
+	if device.Version.String == s.Zap.GetVersion() {
+		return DeviceResponse{}, errors.New("device ja está atualizado")
+	}
+	err = s.Zap.RemoveDevice(s.Ctx, number)
+	if err != nil {
+		return DeviceResponse{}, err
+	}
+	cc, err := s.Zap.CreateDevice(s.Ctx, number)
+	if err != nil {
+		return DeviceResponse{}, err
+	}
+	ID, err := s.repo.UpsertDeviceRepository(s.Ctx, db.UpsertDeviceParams{
+		Number:      number,
+		ContainerID: cc.ID,
+		Endpoint:    cc.Endpoint,
+		Version:     sql.NullString{String: cc.ImageTag, Valid: true},
+		UpdatedWho: sql.NullString{
+			String: "SYSTEM",
+			Valid:  true,
+		},
+	})
+	response := DeviceResponse{
+		Status:        "updated",
+		Endpoint:      cc.Endpoint,
+		IDContainer:   cc.ID,
+		IDDevice:      ID,
+		Version:       cc.ImageTag,
+		VersionServer: s.Zap.GetVersion(),
+	}
+	if err != nil {
+		return DeviceResponse{}, err
+	}
+
+	webhook, err := s.repo.ListWebhooksByDeviceRepository(s.Ctx, ID)
+	if err != nil {
+		return DeviceResponse{}, err
+	}
+	err = s.Zap.PushWebhooks(s.Ctx, cc, ToWebhookPKG(webhook))
+	if err != nil {
+		return DeviceResponse{}, err
+	}
+
+	return response, nil
+}
+
+func (s *WhatsAppService) GetDeviceService(number string) (DeviceResponse, error) {
+	device, err := s.repo.GetDeviceRepository(s.Ctx, number)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeviceResponse{}, errors.New("device não encontrado")
+		}
+		return DeviceResponse{}, err
+	}
+	response := DeviceResponse{
+		Status:        "getted",
+		Endpoint:      device.Endpoint,
+		IDContainer:   device.ContainerID,
+		IDDevice:      device.ID,
+		Version:       device.Version.String,
+		VersionServer: s.Zap.GetVersion(),
+	}
+	return response, nil
+}
+
 func (s *WhatsAppService) RemoveDeviceService(number string) error {
-	err := s.repo.SoftDeleteDeviceRepository(s.Ctx, number)
+	_, err := s.repo.GetDeviceRepository(s.Ctx, number)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("device não encontrado")
+		}
+		return err
+	}
+
+	err = s.repo.SoftDeleteDeviceRepository(s.Ctx, number)
 	if err != nil {
 		return err
 	}

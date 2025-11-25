@@ -90,7 +90,8 @@ DO UPDATE SET
     endpoint = EXCLUDED.endpoint,
     version = EXCLUDED.version,
     updated_who = EXCLUDED.updated_who,
-    updated_at = NOW()
+    updated_at = NOW(),
+    active = true
 RETURNING id
 `
 
