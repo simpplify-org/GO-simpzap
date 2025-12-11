@@ -2,4 +2,6 @@
 .env.homolog*
 .env.prod*
 .env
+.env.dev
 .data/*
+.idea

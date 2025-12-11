@@ -4,7 +4,7 @@
 <h3>QR Code do WhatsApp</h3>
 <img id="qr" width="220" style="border:1px solid #ccc;border-radius:8px">
 <script>
-    const ws = new WebSocket("ws://localhost:3372/device/mariateste/connect/ws");
+    const ws = new WebSocket("ws://52.23.179.22:3372/device/renanteste/connect/ws");
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.event === "qr") {
