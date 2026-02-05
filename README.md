@@ -1,169 +1,193 @@
-# 📲 WhatsApp WebSocket API com Go + Whatsmeow
+# 📲 WhatsApp Multi-Device API (Go + Whatsmeow)
 
-Este projeto é uma API em Go que integra o WhatsApp via biblioteca [Whatsmeow](https://github.com/tulir/whatsmeow), utilizando WebSocket para comunicação com o cliente. Ele permite:
-
-- Enviar mensagens via WhatsApp
-- Manter sessão ativa através de containers do docker com identificador usando o numero de telefone.
-- Conectar ao container do docker para enviar mensagens atraves do proxy do servidor.
-- Persistência de sessão individual para cara numero com o SQLite.
+Este projeto é uma solução **escalável** para integração com WhatsApp.  
+Ele utiliza uma arquitetura de **Orquestração de Instâncias**, onde um serviço **Master** gerencia containers Docker independentes (**filhos**) para cada novo dispositivo, garantindo **isolamento total**, **persistência de sessão** e **estabilidade**.
 
 ---
 
-## 🚀 Tecnologias
+## 🏗️ Arquitetura
 
-- [Go](https://golang.org/)
-- [Whatsmeow](https://github.com/tulir/whatsmeow)
-- [Gorilla WebSocket](https://github.com/gorilla/websocket)
-- [SQLite](https://www.sqlite.org/index.html)
-- [qrterminal](https://github.com/mdp/qrterminal) (para visualização do QR Code no terminal)
+O sistema opera através de um fluxo de criação dinâmica:
 
----
+1. **Master Service**
+    - Recebe solicitações de criação de novos devices
+    - Cria e gerencia containers Docker dedicados
 
-## Como rodar
+2. **Instance Service**
+    - Cada container filho representa **um número do WhatsApp**
+    - Gerencia:
+        - Conexão WebSocket
+        - QR Code
+        - Envio de mensagens
+        - Persistência de sessão
 
-### Pré-requisitos
-
-- Go 1.24+
-- SQLite3
-- Docker 
-
-### 1. Clonar o repositório:
-
-```bash
-git clone https://github.com/simpplify-org/GO-simpzap.git
-cd GO-simpzap
+```
+[ Client ] 
+    |
+    v
+[ Master Service ]
+    |
+    +--> [ Instance Container #1 ] (Device A)
+    +--> [ Instance Container #2 ] (Device B)
+    +--> [ Instance Container #N ] (Device N)
 ```
 
-### 2. Instale as dependências:
+---
+
+## 🚀 Como Rodar (Master)
+
+### 📋 Pré-requisitos
+
+- Go **1.20+**
+- Docker
+- Docker Compose
+- SQLite3
+
+---
+
+### 🔧 Instalação
+
+1. Clone o repositório:
+
+```bash
+git clone https://github.com/seu-usuario/seu-repo.git
+cd seu-repo
+```
+
+2. Instale as dependências:
 
 ```bash
 go mod tidy
 ```
 
-## 3. Configure as variáveis de ambiente:
-
-```bash
-Crie um arquivo .env com as variáveis de ambiente seguindo o arquivo .env.exemplo
-```
-
-## 4. Inicie a aplicação:
+3. Inicie o serviço principal (Master):
 
 ```bash
 go run cmd/main.go
-ou 
-make run
-```
-
-### 1. Criar device usando o numero de telefone:
-Crie um device por meio de `http://localhost:8080/create` com POST.
-
-```json
-{
-  "number" : "551199999999"
-}
-```
----
-
-### 2. Conectar o telefone usando o qr code
-Acesse `ws://localhost:8080/device/{551199999999}/connect/ws` via WebSocket.
-Esta rota retornara o qrcode para ser scaneado e conectar com o dispositivo.
-```json
-{
-    "event": "qr",
-    "image": "data:image/png;base64,{base64 encoded image}"
-}
-```
-
-### 3. Envie mensagen para outro numero utilizando o device que scaneou o qr code como emitente.
-Acesse `http://localhost:8080/device/{551199999999}/send` via POST.  
-Esta rota retornará o qrcode para ser scaneado e conectar com o dispositivo.  
-```json
-{
-    "number": "5511999999992",
-    "message": "Olá, tudo bem ?"
-}
-```
----
-
-### 4. Envie mensagen para outro numero utilizando o device que scaneou o qr code como emitente.
-Acesse `http://localhost:8080/device/{551199999999}/send/many` via POST.  
-Esta rota retornará o qrcode para ser scaneado e conectar com o dispositivo.
-```json
-{
-    "numbers": ["5511999999992", "5511999999993"],
-    "message": "Olá, tudo bem ?"
-}
-```
----
-
-## 📦 Docker
-
-### Build da imagem
-
-```bash
-docker build -t whatsmeow-app .
-```
-
-### Executar
-
-```bash
-docker run -p 8080:8080 whatsmeow-app
 ```
 
 ---
 
-## 🔌 WebSocket - Comunicação
+## 🛠️ Fluxo de Utilização
 
-### Endpoint
+### 1️⃣ Criar uma Nova Instância (Device)
 
+Para gerar um container filho para um número específico, utilize o endpoint do **Master**:
+
+```http
+POST http://localhost:8080/create
 ```
-ws://localhost:8080/ws/whatsapp
+
+Ou via servidor remoto:
+
+```http
+POST http://52.23.179.22:3372/create
 ```
 
-### Eventos recebidos do servidor:
-
-| Evento         | Descrição                                     |
-|----------------|-----------------------------------------------|
-| `code`         | QR Code para escanear                         |
-| `connected`    | Sessão conectada com sucesso                  |
-| `disconnected` | Conexão perdida                               |
-| `restored`     | Sessão restaurada com sucesso                 |
-| `message_sent` | Confirmação de envio de mensagem              |
-| `send_message` | Evento para enviar mensagens                  |
-| `send_error`   | Erro ao enviar mensagem                       |
-| `error`        | Erros gerais do servidor                      |
-
-### Envio de mensagem (cliente → servidor)
-
-Formato JSON:
+#### 📥 Request Body
 
 ```json
 {
-  "event": "send_message",
-  "to": "5511999999999",
-  "text": "Olá! Mensagem de teste 🚀"
+  "number": "11999999999"
 }
 ```
 
+#### 📤 Response
+
+```json
+{
+  "status": "created",
+  "endpoint": "http://52.23.179.22:36945",
+  "id": "cbc5fa8b4efb5dadda097665fa885e81793265b09083858010af8eead25b98e9"
+}
+```
+
+📌 **Nota:**  
+O `endpoint` retornado é **exclusivo** dessa instância e deve ser utilizado para todas as interações com este device.
 
 ---
 
-## ❗ Observações
+### 2️⃣ Autenticação via WebSocket (QR Code)
 
-- A conta WhatsApp deve estar ativa e o número de destino **precisa ter trocado mensagens anteriormente**.
-- A sessão é armazenada no `session.db` para reconexão automática sem novo QR Code.
-- Caso a sessão expire, o cliente será notificado via WebSocket com o evento `disconnected`.
-- Para rodar localmente, é necessário da biblioteca [godotenv](https://github.com/joho/godotenv), para fazer o load do .env.
+Após criar a instância, conecte-se via WebSocket para obter o QR Code:
+
+```text
+ws://52.23.179.22:36945/connect/ws
+```
+
+- O QR Code será enviado pelo WebSocket
+- Após escanear com o WhatsApp, a sessão ficará persistida
+- O container manterá a conexão ativa automaticamente
+
+---
+
+### 3️⃣ Envio de Mensagens (Na Instância)
+
+Todos os envios devem ser feitos **diretamente no endpoint da instância criada**.
+
+---
+
+#### 📩 Envio Unitário
+
+```http
+POST /send
+```
+
+```json
+{
+  "number": "5511999999999",
+  "message": "Olá! Mensagem de teste via container dedicado 🚀"
+}
+```
+
+---
+
+#### 📬 Envio em Massa
+
+```http
+POST /send/many
+```
+
+```json
+{
+  "numbers": [
+    "5511999999999",
+    "5511888888888"
+  ],
+  "message": "Mensagem importante para múltiplos contatos."
+}
+```
+
+---
+
+## 📦 Gerenciamento Docker
+
+Cada device roda em um **container isolado**, o que permite:
+
+- 🔒 Isolamento total entre contas
+- 💥 Falha de um número não afeta os demais
+- 📈 Escalabilidade horizontal
+- 🧠 Limitação de memória por container
+- 🔄 Atualizações granulares de código
+
+---
+
+## 💾 Persistência de Sessão
+
+- As sessões são armazenadas em um arquivo `session.db`
+- Cada container possui seu próprio volume Docker
+- As sessões permanecem ativas mesmo após reinício do container
+
+---
+
+## ⚠️ Observações Importantes
+
+- 📱 Recomenda-se que o número de destino já tenha tido interações prévias
+- 🚫 Evite envios em massa agressivos para reduzir risco de bloqueios
+- 🔁 Um container representa **exatamente um número**
 
 ---
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT.
-
-go get -u go.mau.fi/whatsmeow@main
-go mod tidy
-
-docker build -f client/client.Dockerfile -t zap-client:latest .
-
-docker build -f pkg/whatsapp/client/client.Dockerfile -t zap-client:latest .
+Este projeto está sob a licença **MIT**.
