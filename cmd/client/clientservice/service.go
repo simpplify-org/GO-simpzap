@@ -81,10 +81,8 @@ func (s *WhatsAppService) initClient() error {
 		return fmt.Errorf("erro ao obter device: %w", err)
 	}
 	if deviceStore == nil {
-		deviceStore, err = s.dbContainer.GetFirstDevice(s.ctx)
-		if err != nil {
-			return fmt.Errorf("erro ao criar device: %w", err)
-		}
+		// Cria um device novo vazio — não reutiliza sessão de outro número
+		deviceStore = s.dbContainer.NewDevice()
 	}
 
 	s.client = whatsmeow.NewClient(deviceStore, s.clientLog)

@@ -39,6 +39,12 @@ func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !service.HasID() {
+		// Garante que o client está desconectado antes de abrir o canal QR
+		// (evita o erro "GetQRChannel must be called before connecting")
+		if service.IsConnected() {
+			service.Disconnect()
+		}
+
 		qrChan, err := service.GetQRChannel()
 		if err != nil {
 			conn.WriteJSON(map[string]string{"error": err.Error()})

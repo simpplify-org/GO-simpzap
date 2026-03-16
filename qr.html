@@ -1,16 +1,567 @@
 <!DOCTYPE html>
-<html>
-<body style="text-align:center;font-family:sans-serif;">
-<h3>QR Code do WhatsApp</h3>
-<img id="qr" width="220" style="border:1px solid #ccc;border-radius:8px">
-<script>
-    const ws = new WebSocket("ws://52.23.179.22:36945/connect/ws");
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event === "qr") {
-            document.getElementById("qr").src = data.image;
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SimpZap – Manager</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e8eaf0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 18px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .sub {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      background: #0f1117;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      color: #e8eaf0;
+      font-size: 14px;
+      font-family: inherit;
+      padding: 10px 13px;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: #25d366;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #4b5563;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      align-items: flex-end;
+    }
+
+    .row input {
+      margin-bottom: 0;
+    }
+
+    .field {
+      flex: 1;
+    }
+
+    button {
+      background: #25d366;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) {
+      background: #1ebe58;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(.97);
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    .btn-sec {
+      background: #2a2d3a;
+      color: #d1d5db;
+    }
+
+    .btn-sec:hover:not(:disabled) {
+      background: #3a3d4a;
+    }
+
+    /* Steps */
+    .steps {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #2a2d3a;
+    }
+
+    .step {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #4b5563;
+      background: #0f1117;
+      border-right: 1px solid #2a2d3a;
+      transition: background .3s, color .3s;
+    }
+
+    .step:last-child {
+      border-right: none;
+    }
+
+    .step.active {
+      background: #1a2e1e;
+      color: #25d366;
+    }
+
+    .step.done {
+      background: #0f1117;
+      color: #25d366;
+      opacity: .55;
+    }
+
+    /* Status */
+    #status {
+      font-size: 13px;
+      padding: 9px 13px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+      background: #1e2333;
+      color: #9ca3af;
+      display: none;
+    }
+
+    #status.ok {
+      background: rgba(37, 211, 102, .1);
+      color: #25d366;
+    }
+
+    #status.err {
+      background: rgba(239, 68, 68, .1);
+      color: #f87171;
+    }
+
+    #status.info {
+      background: #1e2333;
+      color: #9ca3af;
+    }
+
+    /* QR */
+    #qr-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    #qr-img {
+      width: 210px;
+      height: 210px;
+      border-radius: 12px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #qr-img img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #2a2d3a;
+      border-top-color: #25d366;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .qr-hint {
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+      max-width: 240px;
+      line-height: 1.6;
+    }
+
+    /* Send form */
+    #send-wrap {
+      display: none;
+    }
+
+    #send-wrap h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: #25d366;
+    }
+
+    .send-field {
+      margin-bottom: 14px;
+    }
+
+    #send-result {
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+      display: none;
+      word-break: break-all;
+    }
+
+    #send-result.ok {
+      background: rgba(37, 211, 102, .1);
+      color: #25d366;
+    }
+
+    #send-result.err {
+      background: rgba(239, 68, 68, .1);
+      color: #f87171;
+    }
+
+    /* Success badge */
+    #connected-badge {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #25d366;
+      margin-bottom: 20px;
+    }
+
+    .pulse-dot {
+      width: 9px;
+      height: 9px;
+      background: #25d366;
+      border-radius: 50%;
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .4;
+        transform: scale(.7)
+      }
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #2a2d3a;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+
+    <!-- Steps indicator -->
+    <div class="steps">
+      <div class="step active" id="s1">① Número</div>
+      <div class="step" id="s2">② Criar</div>
+      <div class="step" id="s3">③ QR Code</div>
+      <div class="step" id="s4">④ Conectado</div>
+    </div>
+
+    <h2>⚡ SimpZap Manager</h2>
+    <p class="sub">Crie e conecte uma instância WhatsApp em segundos.</p>
+
+    <!-- Status bar -->
+    <div id="status"></div>
+
+    <!-- Step 1: número + servidor -->
+    <div id="screen-setup">
+      <div class="field" style="margin-bottom:14px">
+        <label>Servidor</label>
+        <input id="server" type="text" value="http://52.23.179.22:3372" placeholder="http://host:porta" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Número WhatsApp</label>
+          <input id="phone" type="text" placeholder="11999999999" maxlength="15" />
+        </div>
+        <button id="btn-create" onclick="doCreate()">Criar instância</button>
+      </div>
+    </div>
+
+    <!-- Step 3: QR Code -->
+    <div id="qr-wrap">
+      <div id="qr-img">
+        <div class="spinner" id="qr-spinner"></div>
+        <img id="qr-pic" style="display:none" alt="QR WhatsApp" />
+      </div>
+      <p class="qr-hint">Abra o WhatsApp → <strong>Dispositivos vinculados</strong> → <strong>Vincular
+          dispositivo</strong> e escaneie.</p>
+    </div>
+
+    <!-- Step 4: conectado + enviar mensagem -->
+    <div id="send-wrap">
+      <div id="connected-badge">
+        <div class="pulse-dot"></div>
+        WhatsApp conectado!
+      </div>
+      <hr />
+      <h3>📤 Testar envio</h3>
+      <div class="send-field">
+        <label>Número destino</label>
+        <input id="send-to" type="text" placeholder="5511999999999" />
+      </div>
+      <div class="send-field">
+        <label>Mensagem</label>
+        <textarea id="send-msg" placeholder="Olá, tudo bem?">Olá! 👋</textarea>
+      </div>
+      <button onclick="doSend()">Enviar mensagem</button>
+      <div id="send-result"></div>
+      <hr />
+      <button class="btn-sec" onclick="reset()" style="font-size:12px;padding:8px 14px;">Criar outra instância</button>
+    </div>
+
+  </div>
+
+  <script>
+    let ws = null;
+    let currentServer = '';
+    let currentPhone = '';
+
+    // ── helpers ──────────────────────────────────────────
+    function setStatus(msg, type = 'info') {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = type;
+      el.style.display = msg ? 'block' : 'none';
+    }
+
+    function setStep(n) {
+      ['s1', 's2', 's3', 's4'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        el.className = 'step' + (i + 1 === n ? ' active' : i + 1 < n ? ' done' : '');
+      });
+    }
+
+    function show(...ids) { ids.forEach(id => document.getElementById(id).style.display = 'flex'); }
+    function hide(...ids) { ids.forEach(id => document.getElementById(id).style.display = 'none'); }
+
+    // ── Step 2: criar instância ───────────────────────────
+    async function doCreate() {
+      currentServer = document.getElementById('server').value.replace(/\/$/, '').trim();
+      currentPhone = document.getElementById('phone').value.replace(/\D/g, '').trim();
+
+      if (!currentPhone || currentPhone.length < 10)
+        return setStatus('Informe um número válido (ex: 5511999999999).', 'err');
+      if (!currentServer)
+        return setStatus('Informe o endereço do servidor.', 'err');
+
+      document.getElementById('btn-create').disabled = true;
+      setStatus('⏳ Criando instância…', 'info');
+      setStep(2);
+
+      let resp;
+      try {
+        const r = await fetch(`${currentServer}/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: currentPhone }),
+        });
+        resp = await r.json();
+        if (!r.ok) throw new Error(resp.error || `HTTP ${r.status}`);
+      } catch (e) {
+        setStatus('❌ Erro ao criar: ' + e.message, 'err');
+        document.getElementById('btn-create').disabled = false;
+        setStep(1);
+        return;
+      }
+
+      setStatus(`✅ Container criado! ID: ${resp.id}`, 'ok');
+      setStep(3);
+      startWS();
+    }
+
+    // ── Step 3: WebSocket → QR Code ───────────────────────
+    function startWS() {
+      show('qr-wrap');
+      document.getElementById('qr-spinner').style.display = 'block';
+      document.getElementById('qr-pic').style.display = 'none';
+
+      const wsBase = currentServer.replace(/^http/, 'ws');
+      const url = `${wsBase}/device/${currentPhone}/connect/ws`;
+
+      if (ws) { try { ws.close(); } catch (_) { } }
+      ws = new WebSocket(url);
+
+      ws.onopen = () => setStatus('🔗 WebSocket aberto. Aguardando QR Code…', 'info');
+
+      ws.onmessage = (event) => {
+        let data;
+        try { data = JSON.parse(event.data); } catch { return; }
+
+        switch (data.event) {
+          case 'qr':
+            setStatus('📷 Escaneie o QR Code no WhatsApp.', 'info');
+            document.getElementById('qr-spinner').style.display = 'none';
+            const pic = document.getElementById('qr-pic');
+            pic.src = data.image;
+            pic.style.display = 'block';
+            break;
+
+          case 'success':
+          case 'reconnected':
+            ws.close();
+            onConnected();
+            break;
+
+          case 'timeout':
+            setStatus('⏰ QR expirou. Clique em "Criar outra instância" e tente de novo.', 'err');
+            break;
+
+          default:
+            if (data.error) setStatus('❌ ' + data.error, 'err');
         }
-    };
-</script>
+      };
+
+      ws.onerror = () => setStatus('❌ Falha no WebSocket. Verifique o servidor.', 'err');
+      ws.onclose = (e) => {
+        if (e.code !== 1000 && e.code !== 1005)
+          setStatus(`🔌 Conexão encerrada (${e.code}).`, 'err');
+      };
+    }
+
+    // ── Step 4: conectado ─────────────────────────────────
+    function onConnected() {
+      setStep(4);
+      hide('qr-wrap', 'screen-setup');
+      setStatus('');
+      show('send-wrap');
+      document.getElementById('connected-badge').style.display = 'flex';
+      document.getElementById('send-to').value = '';
+    }
+
+    // ── Enviar mensagem de teste ──────────────────────────
+    async function doSend() {
+      const to = document.getElementById('send-to').value.replace(/\D/g, '').trim();
+      const msg = document.getElementById('send-msg').value.trim();
+      const res = document.getElementById('send-result');
+
+      if (!to || !msg) {
+        res.textContent = 'Preencha o número e a mensagem.';
+        res.className = 'err';
+        res.style.display = 'block';
+        return;
+      }
+
+      res.textContent = '⏳ Enviando…';
+      res.className = '';
+      res.style.display = 'block';
+
+      try {
+        const r = await fetch(`${currentServer}/device/${currentPhone}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: to, message: msg }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || data || `HTTP ${r.status}`);
+        res.textContent = `✅ Enviado! ID: ${data.id || JSON.stringify(data)}`;
+        res.className = 'ok';
+      } catch (e) {
+        res.textContent = '❌ ' + e.message;
+        res.className = 'err';
+      }
+      res.style.display = 'block';
+    }
+
+    // ── Reset ─────────────────────────────────────────────
+    function reset() {
+      if (ws) { try { ws.close(); } catch (_) { } ws = null; }
+      setStep(1);
+      setStatus('');
+      hide('qr-wrap', 'send-wrap');
+      show('screen-setup');
+      document.getElementById('screen-setup').style.display = 'block';
+      document.getElementById('connected-badge').style.display = 'none';
+      document.getElementById('btn-create').disabled = false;
+      document.getElementById('phone').value = '';
+      document.getElementById('qr-pic').src = '';
+      document.getElementById('send-result').style.display = 'none';
+    }
+
+    // Enter no campo número
+    document.getElementById('phone').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doCreate();
+    });
+  </script>
 </body>
+
 </html>
