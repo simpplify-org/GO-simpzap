@@ -7,7 +7,8 @@ import (
 )
 
 type WhatsAppHandler struct {
-	Service *WhatsAppService
+	Service  *WhatsAppService
+	DashHTML []byte
 }
 
 func NewWhatsAppHandler(svc *WhatsAppService) *WhatsAppHandler {
@@ -15,9 +16,17 @@ func NewWhatsAppHandler(svc *WhatsAppService) *WhatsAppHandler {
 }
 
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
+	e.GET("/dash", h.Dash)
 	e.POST("/create", h.CreateDevice)
 	e.DELETE("/delete", h.DeleteDevice)
 	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyHandler())) //DIRECIONA PARA O CONTAINER CHILD
+}
+
+func (h *WhatsAppHandler) Dash(c echo.Context) error {
+	if len(h.DashHTML) == 0 {
+		return c.String(http.StatusNotFound, "dashboard not available")
+	}
+	return c.HTMLBlob(http.StatusOK, h.DashHTML)
 }
 
 func (h *WhatsAppHandler) CreateDevice(c echo.Context) error {

@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	_ "embed"
+	"log"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/simpplify-org/GO-simpzap/app"
-	"log"
 )
+
+//go:embed qr.html
+var dashHTML []byte
 
 func main() {
 	ctx := context.Background()
@@ -16,6 +21,7 @@ func main() {
 
 	svc := app.NewWhatsAppService(ctx) //add adiciona o repositorio do webhook
 	h := app.NewWhatsAppHandler(svc)
+	h.DashHTML = dashHTML
 
 	e := echo.New()
 	e.Use(middleware.Recover())
