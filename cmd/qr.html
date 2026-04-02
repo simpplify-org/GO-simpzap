@@ -304,17 +304,9 @@
     }
 
     @keyframes pulse {
-
       0%,
-      100% {
-        opacity: 1;
-        transform: scale(1)
-      }
-
-      50% {
-        opacity: .4;
-        transform: scale(.7)
-      }
+      100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .4; transform: scale(.7); }
     }
 
     hr {
@@ -326,242 +318,242 @@
 </head>
 
 <body>
-  <div class="card">
+<div class="card">
 
-    <!-- Steps indicator -->
-    <div class="steps">
-      <div class="step active" id="s1">① Número</div>
-      <div class="step" id="s2">② Criar</div>
-      <div class="step" id="s3">③ QR Code</div>
-      <div class="step" id="s4">④ Conectado</div>
-    </div>
-
-    <h2>⚡ SimpZap Manager</h2>
-    <p class="sub">Crie e conecte uma instância WhatsApp em segundos.</p>
-
-    <!-- Status bar -->
-    <div id="status"></div>
-
-    <!-- Step 1: número + servidor -->
-    <div id="screen-setup">
-      <div class="field" style="margin-bottom:14px">
-        <label>Servidor</label>
-        <input id="server" type="text" value="http://52.23.179.22:3372" placeholder="http://host:porta" />
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Número WhatsApp</label>
-          <input id="phone" type="text" placeholder="11999999999" maxlength="15" />
-        </div>
-        <button id="btn-create" onclick="doCreate()">Criar instância</button>
-      </div>
-    </div>
-
-    <!-- Step 3: QR Code -->
-    <div id="qr-wrap">
-      <div id="qr-img">
-        <div class="spinner" id="qr-spinner"></div>
-        <img id="qr-pic" style="display:none" alt="QR WhatsApp" />
-      </div>
-      <p class="qr-hint">Abra o WhatsApp → <strong>Dispositivos vinculados</strong> → <strong>Vincular
-          dispositivo</strong> e escaneie.</p>
-    </div>
-
-    <!-- Step 4: conectado + enviar mensagem -->
-    <div id="send-wrap">
-      <div id="connected-badge">
-        <div class="pulse-dot"></div>
-        WhatsApp conectado!
-      </div>
-      <hr />
-      <h3>📤 Testar envio</h3>
-      <div class="send-field">
-        <label>Número destino</label>
-        <input id="send-to" type="text" placeholder="5511999999999" />
-      </div>
-      <div class="send-field">
-        <label>Mensagem</label>
-        <textarea id="send-msg" placeholder="Olá, tudo bem?">Olá! 👋</textarea>
-      </div>
-      <button onclick="doSend()">Enviar mensagem</button>
-      <div id="send-result"></div>
-      <hr />
-      <button class="btn-sec" onclick="reset()" style="font-size:12px;padding:8px 14px;">Criar outra instância</button>
-    </div>
-
+  <div class="steps">
+    <div class="step active" id="s1">① Número</div>
+    <div class="step" id="s2">② Criar</div>
+    <div class="step" id="s3">③ QR Code</div>
+    <div class="step" id="s4">④ Conectado</div>
   </div>
 
-  <script>
-    let ws = null;
-    let currentServer = '';
-    let currentPhone = '';
+  <h2>⚡ SimpZap Manager</h2>
+  <p class="sub">Crie e conecte uma instância WhatsApp em segundos.</p>
 
-    // ── helpers ──────────────────────────────────────────
-    function setStatus(msg, type = 'info') {
-      const el = document.getElementById('status');
-      el.textContent = msg;
-      el.className = type;
-      el.style.display = msg ? 'block' : 'none';
-    }
+  <div id="status"></div>
 
-    function setStep(n) {
-      ['s1', 's2', 's3', 's4'].forEach((id, i) => {
-        const el = document.getElementById(id);
-        el.className = 'step' + (i + 1 === n ? ' active' : i + 1 < n ? ' done' : '');
-      });
-    }
+  <div id="screen-setup">
+    <div class="field" style="margin-bottom:14px">
+      <label>Servidor</label>
+      <input id="server" type="text" value="http://52.23.179.22:3372" placeholder="http://host:porta" />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Número WhatsApp</label>
+        <input id="phone" type="text" placeholder="11999999999" maxlength="15" />
+      </div>
+      <button id="btn-create" onclick="doCreate()">Criar instância</button>
+    </div>
+  </div>
 
-    function show(...ids) { ids.forEach(id => document.getElementById(id).style.display = 'flex'); }
-    function hide(...ids) { ids.forEach(id => document.getElementById(id).style.display = 'none'); }
+  <div id="qr-wrap">
+    <div id="qr-img">
+      <div class="spinner" id="qr-spinner"></div>
+      <img id="qr-pic" style="display:none" alt="QR WhatsApp" />
+    </div>
+    <p class="qr-hint">Abra o WhatsApp → <strong>Dispositivos vinculados</strong> → <strong>Vincular dispositivo</strong> e escaneie.</p>
+  </div>
 
-    // ── Step 2: criar instância ───────────────────────────
-    async function doCreate() {
-      currentServer = document.getElementById('server').value.replace(/\/$/, '').trim();
-      currentPhone = document.getElementById('phone').value.replace(/\D/g, '').trim();
+  <div id="send-wrap">
+    <div id="connected-badge">
+      <div class="pulse-dot"></div>
+      WhatsApp conectado!
+    </div>
+    <hr />
+    <h3>📤 Testar envio</h3>
+    <div class="send-field">
+      <label>Número destino</label>
+      <input id="send-to" type="text" placeholder="5511999999999" />
+    </div>
+    <div class="send-field">
+      <label>Mensagem</label>
+      <textarea id="send-msg" placeholder="Olá, tudo bem?">Olá! 👋</textarea>
+    </div>
+    <button onclick="doSend()">Enviar mensagem</button>
+    <div id="send-result"></div>
+    <hr />
+    <button class="btn-sec" onclick="reset()" style="font-size:12px;padding:8px 14px;">Criar outra instância</button>
+  </div>
 
-      if (!currentPhone || currentPhone.length < 10)
-        return setStatus('Informe um número válido (ex: 5511999999999).', 'err');
-      if (!currentServer)
-        return setStatus('Informe o endereço do servidor.', 'err');
+</div>
 
-      document.getElementById('btn-create').disabled = true;
-      setStatus('⏳ Criando instância…', 'info');
-      setStep(2);
+<script>
+  let ws = null;
+  let currentServer = '';
+  let currentPhone = '';
 
-      let resp;
-      try {
-        const r = await fetch(`${currentServer}/create`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ number: currentPhone }),
-        });
-        resp = await r.json();
-        if (!r.ok) throw new Error(resp.error || `HTTP ${r.status}`);
-      } catch (e) {
-        setStatus('❌ Erro ao criar: ' + e.message, 'err');
-        document.getElementById('btn-create').disabled = false;
-        setStep(1);
-        return;
-      }
+  // ── helpers ──────────────────────────────────────────
+  function setStatus(msg, type = 'info') {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = type;
+    el.style.display = msg ? 'block' : 'none';
+  }
 
-      setStatus(`✅ Container criado! ID: ${resp.id}`, 'ok');
-      setStep(3);
-      startWS();
-    }
-
-    // ── Step 3: WebSocket → QR Code ───────────────────────
-    function startWS() {
-      show('qr-wrap');
-      document.getElementById('qr-spinner').style.display = 'block';
-      document.getElementById('qr-pic').style.display = 'none';
-
-      const wsBase = currentServer.replace(/^http/, 'ws');
-      const url = `${wsBase}/device/${currentPhone}/connect/ws`;
-
-      if (ws) { try { ws.close(); } catch (_) { } }
-      ws = new WebSocket(url);
-
-      ws.onopen = () => setStatus('🔗 WebSocket aberto. Aguardando QR Code…', 'info');
-
-      ws.onmessage = (event) => {
-        let data;
-        try { data = JSON.parse(event.data); } catch { return; }
-
-        switch (data.event) {
-          case 'qr':
-            setStatus('📷 Escaneie o QR Code no WhatsApp.', 'info');
-            document.getElementById('qr-spinner').style.display = 'none';
-            const pic = document.getElementById('qr-pic');
-            pic.src = data.image;
-            pic.style.display = 'block';
-            break;
-
-          case 'success':
-          case 'reconnected':
-            ws.close();
-            onConnected();
-            break;
-
-          case 'timeout':
-            setStatus('⏰ QR expirou. Clique em "Criar outra instância" e tente de novo.', 'err');
-            break;
-
-          default:
-            if (data.error) setStatus('❌ ' + data.error, 'err');
-        }
-      };
-
-      ws.onerror = () => setStatus('❌ Falha no WebSocket. Verifique o servidor.', 'err');
-      ws.onclose = (e) => {
-        if (e.code !== 1000 && e.code !== 1005)
-          setStatus(`🔌 Conexão encerrada (${e.code}).`, 'err');
-      };
-    }
-
-    // ── Step 4: conectado ─────────────────────────────────
-    function onConnected() {
-      setStep(4);
-      hide('qr-wrap', 'screen-setup');
-      setStatus('');
-      show('send-wrap');
-      document.getElementById('connected-badge').style.display = 'flex';
-      document.getElementById('send-to').value = '';
-    }
-
-    // ── Enviar mensagem de teste ──────────────────────────
-    async function doSend() {
-      const to = document.getElementById('send-to').value.replace(/\D/g, '').trim();
-      const msg = document.getElementById('send-msg').value.trim();
-      const res = document.getElementById('send-result');
-
-      if (!to || !msg) {
-        res.textContent = 'Preencha o número e a mensagem.';
-        res.className = 'err';
-        res.style.display = 'block';
-        return;
-      }
-
-      res.textContent = '⏳ Enviando…';
-      res.className = '';
-      res.style.display = 'block';
-
-      try {
-        const r = await fetch(`${currentServer}/device/${currentPhone}/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ number: to, message: msg }),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || data || `HTTP ${r.status}`);
-        res.textContent = `✅ Enviado! ID: ${data.id || JSON.stringify(data)}`;
-        res.className = 'ok';
-      } catch (e) {
-        res.textContent = '❌ ' + e.message;
-        res.className = 'err';
-      }
-      res.style.display = 'block';
-    }
-
-    // ── Reset ─────────────────────────────────────────────
-    function reset() {
-      if (ws) { try { ws.close(); } catch (_) { } ws = null; }
-      setStep(1);
-      setStatus('');
-      hide('qr-wrap', 'send-wrap');
-      show('screen-setup');
-      document.getElementById('screen-setup').style.display = 'block';
-      document.getElementById('connected-badge').style.display = 'none';
-      document.getElementById('btn-create').disabled = false;
-      document.getElementById('phone').value = '';
-      document.getElementById('qr-pic').src = '';
-      document.getElementById('send-result').style.display = 'none';
-    }
-
-    // Enter no campo número
-    document.getElementById('phone').addEventListener('keydown', e => {
-      if (e.key === 'Enter') doCreate();
+  function setStep(n) {
+    ['s1', 's2', 's3', 's4'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      el.className = 'step' + (i + 1 === n ? ' active' : i + 1 < n ? ' done' : '');
     });
-  </script>
+  }
+
+  // 🔥 CORREÇÃO PRINCIPAL AQUI:
+  function show(...ids) {
+    ids.forEach(id => {
+      // O qr-wrap precisa de flex para alinhar ao centro, o resto fica como block
+      document.getElementById(id).style.display = (id === 'qr-wrap') ? 'flex' : 'block';
+    });
+  }
+
+  function hide(...ids) { ids.forEach(id => document.getElementById(id).style.display = 'none'); }
+
+  // ── Step 2: criar instância ───────────────────────────
+  async function doCreate() {
+    currentServer = document.getElementById('server').value.replace(/\/$/, '').trim();
+    currentPhone = document.getElementById('phone').value.replace(/\D/g, '').trim();
+
+    if (!currentPhone || currentPhone.length < 10)
+      return setStatus('Informe um número válido (ex: 5511999999999).', 'err');
+    if (!currentServer)
+      return setStatus('Informe o endereço do servidor.', 'err');
+
+    document.getElementById('btn-create').disabled = true;
+    setStatus('⏳ Criando instância…', 'info');
+    setStep(2);
+
+    let resp;
+    try {
+      const r = await fetch(`${currentServer}/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: currentPhone }),
+      });
+      resp = await r.json();
+      if (!r.ok) throw new Error(resp.error || `HTTP ${r.status}`);
+    } catch (e) {
+      setStatus('❌ Erro ao criar: ' + e.message, 'err');
+      document.getElementById('btn-create').disabled = false;
+      setStep(1);
+      return;
+    }
+
+    setStatus(`✅ Container criado! ID: ${resp.id}`, 'ok');
+    setStep(3);
+    startWS();
+  }
+
+  // ── Step 3: WebSocket → QR Code ───────────────────────
+  function startWS() {
+    show('qr-wrap');
+    document.getElementById('qr-spinner').style.display = 'block';
+    document.getElementById('qr-pic').style.display = 'none';
+
+    const wsBase = currentServer.replace(/^http/, 'ws');
+    const url = `${wsBase}/device/${currentPhone}/connect/ws`;
+
+    if (ws) { try { ws.close(); } catch (_) { } }
+    ws = new WebSocket(url);
+
+    ws.onopen = () => setStatus('🔗 WebSocket aberto. Aguardando QR Code…', 'info');
+
+    ws.onmessage = (event) => {
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
+
+      switch (data.event) {
+        case 'qr':
+          setStatus('📷 Escaneie o QR Code no WhatsApp.', 'info');
+          document.getElementById('qr-spinner').style.display = 'none';
+          const pic = document.getElementById('qr-pic');
+          pic.src = data.image;
+          pic.style.display = 'block';
+          break;
+
+        case 'success':
+        case 'reconnected':
+          ws.close();
+          onConnected();
+          break;
+
+        case 'timeout':
+          setStatus('⏰ QR expirou. Clique em "Criar outra instância" e tente de novo.', 'err');
+          break;
+
+        default:
+          if (data.error) setStatus('❌ ' + data.error, 'err');
+      }
+    };
+
+    ws.onerror = () => setStatus('❌ Falha no WebSocket. Verifique o servidor.', 'err');
+    ws.onclose = (e) => {
+      if (e.code !== 1000 && e.code !== 1005)
+        setStatus(`🔌 Conexão encerrada (${e.code}).`, 'err');
+    };
+  }
+
+  // ── Step 4: conectado ─────────────────────────────────
+  function onConnected() {
+    setStep(4);
+    hide('qr-wrap', 'screen-setup');
+    setStatus('');
+    show('send-wrap');
+    document.getElementById('connected-badge').style.display = 'flex';
+    document.getElementById('send-to').value = '';
+  }
+
+  // ── Enviar mensagem de teste ──────────────────────────
+  async function doSend() {
+    const to = document.getElementById('send-to').value.replace(/\D/g, '').trim();
+    const msg = document.getElementById('send-msg').value.trim();
+    const res = document.getElementById('send-result');
+
+    if (!to || !msg) {
+      res.textContent = 'Preencha o número e a mensagem.';
+      res.className = 'err';
+      res.style.display = 'block';
+      return;
+    }
+
+    res.textContent = '⏳ Enviando…';
+    res.className = '';
+    res.style.display = 'block';
+
+    try {
+      const r = await fetch(`${currentServer}/device/${currentPhone}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: to, message: msg }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || data || `HTTP ${r.status}`);
+      res.textContent = `✅ Enviado! ID: ${data.id || JSON.stringify(data)}`;
+      res.className = 'ok';
+    } catch (e) {
+      res.textContent = '❌ ' + e.message;
+      res.className = 'err';
+    }
+    res.style.display = 'block';
+  }
+
+  // ── Reset ─────────────────────────────────────────────
+  function reset() {
+    if (ws) { try { ws.close(); } catch (_) { } ws = null; }
+    setStep(1);
+    setStatus('');
+    hide('qr-wrap', 'send-wrap');
+    show('screen-setup');
+    document.getElementById('connected-badge').style.display = 'none';
+    document.getElementById('btn-create').disabled = false;
+    document.getElementById('phone').value = '';
+    document.getElementById('qr-pic').src = '';
+    document.getElementById('send-result').style.display = 'none';
+  }
+
+  // Enter no campo número
+  document.getElementById('phone').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doCreate();
+  });
+</script>
 </body>
 
 </html>

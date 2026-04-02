@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/simpplify-org/GO-simpzap/cmd/client/clientservice"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/simpplify-org/GO-simpzap/cmd/client/clientservice"
 
 	"github.com/gorilla/websocket"
 )
@@ -234,6 +235,24 @@ func handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Libera a origem (para produção, você pode trocar "*" por "http://localhost:3000")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
+
+		// Se for uma requisição OPTIONS (Preflight do navegador), retorna 200 OK e para por aqui
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Segue o fluxo normal para a rota solicitada
+		next.ServeHTTP(w, r)
+	})
+}
+
 // main com logs e shutdown gracioso
 func main() {
 	var err error
@@ -253,7 +272,10 @@ func main() {
 		fmt.Fprintln(w, "ok")
 	})
 
-	server := &http.Server{Addr: ":8080"}
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: corsMiddleware(http.DefaultServeMux),
+	}
 
 	go func() {
 		log.Println("🚀 Servidor HTTP iniciado em http://localhost:8080")
