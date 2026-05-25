@@ -152,6 +152,12 @@ func (s *ZapPkg) ProxyHandler() http.Handler {
 		r.URL.Path = singleJoiningSlash("/", r.URL.Path[len(stripPrefix):])
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("[Proxy Error] falha no proxy para %s: %v", target.String(), err)
+			http.Error(w, "Proxy error: "+err.Error(), http.StatusBadGateway)
+		}
+		
+		log.Printf("[Proxy] Encaminhando req %s para %s (Path: %s)", r.Method, target.String(), r.URL.Path)
 		proxy.ServeHTTP(w, r)
 	})
 
