@@ -27,6 +27,7 @@ func (s *WhatsAppService) CreateDevice(number string) (CreateDeviceResponse, err
 		Status:   "created",
 		Endpoint: cc.Endpoint,
 		ID:       cc.ID,
+		WsUrl:    "/device/" + number + "/connect/ws",
 	}
 	return response, nil
 }

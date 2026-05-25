@@ -12,6 +12,7 @@ type CreateDeviceResponse struct {
 	Status   string `json:"status"`
 	Endpoint string `json:"endpoint"`
 	ID       string `json:"id"`
+	WsUrl    string `json:"ws_url"`
 }
 
 type DeleteDeviceResponse struct {

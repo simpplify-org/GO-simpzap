@@ -439,17 +439,17 @@
 
     setStatus(`✅ Container criado! ID: ${resp.id}`, 'ok');
     setStep(3);
-    startWS();
+    startWS(resp.ws_url);
   }
 
   // ── Step 3: WebSocket → QR Code ───────────────────────
-  function startWS() {
+  function startWS(wsUrl) {
     show('qr-wrap');
     document.getElementById('qr-spinner').style.display = 'block';
     document.getElementById('qr-pic').style.display = 'none';
 
     const wsBase = currentServer.replace(/^http/, 'ws');
-    const url = `${wsBase}/device/${currentPhone}/connect/ws`;
+    const url = wsUrl ? `${wsBase}${wsUrl}` : `${wsBase}/device/${currentPhone}/connect/ws`;
 
     if (ws) { try { ws.close(); } catch (_) { } }
     ws = new WebSocket(url);
