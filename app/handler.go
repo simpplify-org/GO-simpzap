@@ -18,6 +18,7 @@ func NewWhatsAppHandler(svc *WhatsAppService) *WhatsAppHandler {
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/dash", h.Dash)
 	e.POST("/create", h.CreateDevice)
+	e.GET("/devices", h.ListDevices)
 	e.DELETE("/delete", h.DeleteDevice)
 	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyHandler())) //DIRECIONA PARA O CONTAINER CHILD
 }
@@ -58,4 +59,14 @@ func (h *WhatsAppHandler) DeleteDevice(c echo.Context) error {
 
 	resp := DeleteDeviceResponse{Status: "removed"}
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *WhatsAppHandler) ListDevices(c echo.Context) error {
+	devices, err := h.Service.ListDevices()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, devices)
 }

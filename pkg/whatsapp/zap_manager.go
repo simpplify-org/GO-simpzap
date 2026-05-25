@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/fsouza/go-dockerclient"
 )
 
 // Gerencia containers por device, faz proxy das chamadas.
@@ -176,4 +179,72 @@ func (s *ZapPkg) ProxyHandler() http.Handler {
 	})
 
 	return mux
+}
+
+type DeviceInfo struct {
+	ID       string `json:"id"`
+	Number   string `json:"number"`
+	Endpoint string `json:"endpoint"`
+	WsUrl    string `json:"ws_url"`
+	Status   string `json:"status"`
+}
+
+// ListDevices busca todos os containers no Docker com o label app=whatsapp-client
+func (s *ZapPkg) ListDevices(ctx context.Context) ([]DeviceInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	containers, err := s.dockerMgr.client.ListContainers(docker.ListContainersOptions{
+		All: true,
+		Filters: map[string][]string{
+			"label": {"app=whatsapp-client"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var list []DeviceInfo
+	host := s.dockerMgr.getDockerHost()
+
+	for _, c := range containers {
+		phoneNumber := c.Labels["phone_number"]
+		if phoneNumber == "" {
+			continue
+		}
+
+		inspect, err := s.dockerMgr.client.InspectContainerWithOptions(docker.InspectContainerOptions{ID: c.ID})
+		if err != nil {
+			continue
+		}
+
+		port := 0
+		if bindings, ok := inspect.NetworkSettings.Ports["8080/tcp"]; ok && len(bindings) > 0 {
+			port, _ = strconv.Atoi(bindings[0].HostPort)
+		}
+
+		endpoint := fmt.Sprintf("http://%s:%d", host, port)
+		wsUrl := "/device/" + phoneNumber + "/connect/ws"
+
+		// Sincroniza o cache interno em memória
+		cc := &ClientContainer{
+			ID:       c.ID,
+			Host:     host,
+			Port:     port,
+			Endpoint: endpoint,
+		}
+		s.devices[phoneNumber] = cc
+
+		status := c.State // "running", "exited", etc.
+
+		list = append(list, DeviceInfo{
+			ID:       c.ID,
+			Number:   phoneNumber,
+			Endpoint: endpoint,
+			WsUrl:    wsUrl,
+			Status:   status,
+		})
+	}
+
+	return list, nil
 }

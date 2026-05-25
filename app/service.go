@@ -39,3 +39,7 @@ func (s *WhatsAppService) RemoveDevice(number string) error {
 func (s *WhatsAppService) ProxyHandler() http.Handler {
 	return s.Zap.ProxyHandler()
 }
+
+func (s *WhatsAppService) ListDevices() ([]whatsapp.DeviceInfo, error) {
+	return s.Zap.ListDevices(s.Ctx)
+}

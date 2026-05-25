@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>SimpZap – Painel de Instâncias</title>
+  <title>SimpZap – Hub de Instâncias</title>
   <!-- Importando fontes modernas -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,6 +76,26 @@
       pointer-events: none;
     }
 
+    /* Layout do Dashboard */
+    .dashboard-layout {
+      display: flex;
+      gap: 24px;
+      width: 100%;
+      max-width: 1060px;
+      z-index: 10;
+      position: relative;
+    }
+
+    .column-left {
+      flex: 0 0 460px;
+      width: 460px;
+    }
+
+    .column-right {
+      flex: 1;
+      min-width: 0;
+    }
+
     .card {
       background: var(--card-bg);
       backdrop-filter: blur(20px);
@@ -84,11 +104,11 @@
       border-radius: 24px;
       padding: 40px 36px;
       width: 100%;
-      max-width: 500px;
       box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
-      z-index: 10;
-      position: relative;
       transition: all 0.3s ease;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
 
     .header-logo {
@@ -484,95 +504,361 @@
       border-color: rgba(255, 255, 255, 0.05);
       color: #a3b3d1;
     }
+
+    /* === GRID DE INSTÂNCIAS (Direita) === */
+    .devices-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .btn-refresh {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-refresh:hover {
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: none;
+      transform: translateY(-1px);
+    }
+
+    .devices-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
+      flex: 1;
+    }
+
+    .devices-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .devices-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .devices-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 3px;
+    }
+    .devices-list::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .device-item {
+      background: rgba(10, 12, 20, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: fadeIn 0.25s ease;
+    }
+
+    .device-item:hover {
+      border-color: rgba(0, 230, 118, 0.2);
+      background: rgba(10, 12, 20, 0.7);
+    }
+
+    .device-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .device-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: space-between;
+    }
+
+    .device-phone {
+      font-size: 14px;
+      font-weight: 750;
+      color: #fff;
+    }
+
+    .device-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .device-status.running {
+      background: rgba(0, 230, 118, 0.1);
+      color: var(--primary-color);
+    }
+
+    .device-status.stopped {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .device-status.running .status-dot {
+      box-shadow: 0 0 6px var(--primary-color);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    .device-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .endpoint-line {
+      word-break: break-all;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .endpoint-line code {
+      font-family: monospace;
+      color: #a3b3d1;
+    }
+
+    .device-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-action {
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 8px;
+      box-shadow: none;
+      white-space: nowrap;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .btn-action.btn-connect {
+      background: rgba(0, 230, 118, 0.1);
+      color: var(--primary-color);
+      border: 1px solid rgba(0, 230, 118, 0.15);
+    }
+
+    .btn-action.btn-connect:hover {
+      background: var(--primary-color);
+      color: #000;
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .btn-action.btn-test {
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.15);
+    }
+
+    .btn-action.btn-test:hover {
+      background: #3b82f6;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-action.btn-delete {
+      background: rgba(255, 82, 82, 0.1);
+      color: #ff8a80;
+      border: 1px solid rgba(255, 82, 82, 0.15);
+    }
+
+    .btn-action.btn-delete:hover {
+      background: var(--error-color);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(255, 82, 82, 0.3);
+    }
+
+    .empty-state, .loading-state, .error-state {
+      text-align: center;
+      padding: 40px 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      background: rgba(10, 12, 20, 0.3);
+      border: 1px dashed rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      height: 150px;
+    }
+
+    .spinner.small {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+    }
+
+    /* Grid Responsivo */
+    @media (max-width: 960px) {
+      .dashboard-layout {
+        flex-direction: column;
+      }
+      .column-left {
+        width: 100%;
+        flex: auto;
+      }
+    }
   </style>
 </head>
 
 <body>
-  <div class="card">
+  <div class="dashboard-layout">
+    
+    <!-- Coluna Esquerda: Conexão / Ações -->
+    <div class="column-left">
+      <div class="card">
+        <!-- Steps indicator -->
+        <div class="steps">
+          <div class="step active" id="s1">① Número</div>
+          <div class="step" id="s2">② Criar</div>
+          <div class="step" id="s3">③ QR Code</div>
+          <div class="step" id="s4">④ Pronto</div>
+        </div>
 
-    <!-- Steps indicator -->
-    <div class="steps">
-      <div class="step active" id="s1">① Número</div>
-      <div class="step" id="s2">② Criar</div>
-      <div class="step" id="s3">③ QR Code</div>
-      <div class="step" id="s4">④ Pronto</div>
-    </div>
+        <div class="header-logo">
+          <div class="logo-icon">⚡</div>
+          <h2 id="left-card-title">SimpZap Manager</h2>
+        </div>
+        <p class="sub" id="left-card-sub">Inicialize e gerencie conexões do WhatsApp através de containers dedicados.</p>
 
-    <div class="header-logo">
-      <div class="logo-icon">⚡</div>
-      <h2>SimpZap Manager</h2>
-    </div>
-    <p class="sub">Inicialize e gerencie conexões do WhatsApp através de containers dedicados.</p>
+        <!-- Status bar -->
+        <div id="status"></div>
 
-    <!-- Status bar -->
-    <div id="status"></div>
+        <!-- Step 1 & 2: Setup Form -->
+        <div id="screen-setup">
+          <div class="field" style="margin-bottom: 16px;">
+            <label>Endereço do Servidor Master</label>
+            <div class="input-wrapper">
+              <input id="server" type="text" placeholder="http://host:porta" />
+              <div class="input-badge" id="detected-badge">Auto</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Número WhatsApp (com DDI + DDD)</label>
+              <input id="phone" type="text" placeholder="Ex: 5511999999999" maxlength="15" />
+            </div>
+            <button id="btn-create" onclick="doCreate()">
+              Conectar
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+          </div>
+        </div>
 
-    <!-- Step 1 & 2: Setup Form -->
-    <div id="screen-setup">
-      <div class="field" style="margin-bottom: 16px;">
-        <label>Endereço do Servidor Master</label>
-        <div class="input-wrapper">
-          <input id="server" type="text" placeholder="http://host:porta" />
-          <div class="input-badge" id="detected-badge">Auto</div>
+        <!-- Step 3: QR Code -->
+        <div id="qr-wrap">
+          <div id="qr-img">
+            <div class="spinner" id="qr-spinner"></div>
+            <img id="qr-pic" style="display:none" alt="QR WhatsApp" />
+          </div>
+          <p class="qr-hint">Abra o WhatsApp no celular → toque em <strong>Dispositivos vinculados</strong> → <strong>Vincular dispositivo</strong> e aponte a câmera.</p>
+        </div>
+
+        <!-- Step 4: Conectado + Formulário de Teste -->
+        <div id="send-wrap">
+          <div id="connected-badge">
+            <div class="pulse-dot"></div>
+            Instância Conectada e Pronta!
+          </div>
+          
+          <!-- Nova URL da Instância Criada -->
+          <div class="endpoint-card">
+            <label>🔗 URL da Instância Dedicada (Porta Dinâmica)</label>
+            <p>Utilize esta URL em seu sistema integrado para realizar disparos ou gerenciar este container.</p>
+            <div class="copy-container">
+              <input id="instance-url" type="text" readonly value="" onclick="this.select()" />
+              <button id="btn-copy" onclick="copyEndpoint()" style="padding: 10px 14px; font-size: 12px; font-weight: 600;">Copiar</button>
+            </div>
+          </div>
+
+          <hr />
+          <h3>📤 Testar Envio de Mensagem</h3>
+          <div class="send-field">
+            <label>Número de Destino (com DDI e DDD)</label>
+            <input id="send-to" type="text" placeholder="Ex: 5511999999999" />
+          </div>
+          <div class="send-field">
+            <label>Mensagem</label>
+            <textarea id="send-msg" placeholder="Digite uma mensagem de teste...">Olá! 👋 Mensagem enviada com sucesso do container dedicado SimpZap.</textarea>
+          </div>
+          <button onclick="doSend()">
+            Enviar Mensagem
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+          <div id="send-result"></div>
+          <hr />
+          <button class="btn-sec" onclick="reset()" style="font-size:12px;padding:10px 16px;">Criar outra instância</button>
         </div>
       </div>
-      <div class="row">
-        <div class="field">
-          <label>Número WhatsApp (com DDI + DDD)</label>
-          <input id="phone" type="text" placeholder="Ex: 5511999999999" maxlength="15" />
+    </div>
+    
+    <!-- Coluna Direita: Instâncias Ativas no Docker -->
+    <div class="column-right">
+      <div class="card">
+        <div class="devices-header">
+          <h2>📱 Instâncias Ativas (Docker)</h2>
+          <button class="btn-refresh" onclick="loadDevices()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            Atualizar
+          </button>
         </div>
-        <button id="btn-create" onclick="doCreate()">
-          Conectar
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Step 3: QR Code -->
-    <div id="qr-wrap">
-      <div id="qr-img">
-        <div class="spinner" id="qr-spinner"></div>
-        <img id="qr-pic" style="display:none" alt="QR WhatsApp" />
-      </div>
-      <p class="qr-hint">Abra o WhatsApp no celular → toque em <strong>Dispositivos vinculados</strong> → <strong>Vincular dispositivo</strong> e aponte a câmera.</p>
-    </div>
-
-    <!-- Step 4: Conectado + Formulário de Teste -->
-    <div id="send-wrap">
-      <div id="connected-badge">
-        <div class="pulse-dot"></div>
-        Instância Conectada e Pronta!
-      </div>
-      
-      <!-- Nova URL da Instância Criada -->
-      <div class="endpoint-card">
-        <label>🔗 URL da Instância Dedicada (Porta Dinâmica)</label>
-        <p>Utilize esta URL em seu sistema integrado para realizar disparos ou gerenciar este container.</p>
-        <div class="copy-container">
-          <input id="instance-url" type="text" readonly value="" onclick="this.select()" />
-          <button id="btn-copy" onclick="copyEndpoint()" style="padding: 10px 14px; font-size: 12px; font-weight: 600;">Copiar</button>
+        <p class="sub" style="margin-bottom: 24px;">Veja e gerencie todos os containers rodando atualmente em sua VPS.</p>
+        
+        <div class="devices-list" id="devices-list">
+          <!-- Injetado dinamicamente via JS -->
         </div>
       </div>
-
-      <hr />
-      <h3>📤 Testar Envio de Mensagem</h3>
-      <div class="send-field">
-        <label>Número de Destino (com DDI e DDD)</label>
-        <input id="send-to" type="text" placeholder="Ex: 5511999999999" />
-      </div>
-      <div class="send-field">
-        <label>Mensagem</label>
-        <textarea id="send-msg" placeholder="Digite uma mensagem de teste...">Olá! 👋 Mensagem enviada com sucesso do container dedicado SimpZap.</textarea>
-      </div>
-      <button onclick="doSend()">
-        Enviar Mensagem
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-      </button>
-      <div id="send-result"></div>
-      <hr />
-      <button class="btn-sec" onclick="reset()" style="font-size:12px;padding:10px 16px;">Criar outra instância</button>
     </div>
-
+    
   </div>
 
   <script>
@@ -594,7 +880,133 @@
         serverInput.value = 'http://localhost:3372';
         detectedBadge.textContent = 'Padrão';
       }
+
+      // Carrega as instâncias ativas do docker
+      setTimeout(loadDevices, 400);
     });
+
+    // ── Carrega os containers ativos na VPS via GET /devices ──
+    async function loadDevices() {
+      const serverInput = document.getElementById('server').value.replace(/\/$/, '').trim();
+      const listEl = document.getElementById('devices-list');
+      if (!serverInput) return;
+      
+      listEl.innerHTML = `
+        <div class="loading-state">
+          <div class="spinner small"></div>
+          Buscando containers ativos...
+        </div>
+      `;
+      
+      try {
+        const r = await fetch(`${serverInput}/devices`);
+        if (!r.ok) throw new Error(`Status ${r.status}`);
+        const devices = await r.json();
+        
+        if (!devices || devices.length === 0) {
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <span>📭 Nenhuma instância ativa rodando.</span>
+            </div>
+          `;
+          return;
+        }
+        
+        listEl.innerHTML = '';
+        devices.forEach(d => {
+          const item = document.createElement('div');
+          item.className = 'device-item';
+          item.innerHTML = `
+            <div class="device-info">
+              <div class="device-header">
+                <div class="device-phone">📱 ${d.number}</div>
+                <div class="device-status ${d.status === 'running' ? 'running' : 'stopped'}">
+                  <span class="status-dot"></span>
+                  ${d.status === 'running' ? 'Ativo' : 'Inativo'}
+                </div>
+              </div>
+              <div class="device-meta">
+                <div class="endpoint-line"><strong>URL:</strong> <code>${d.endpoint}</code></div>
+                <div style="margin-top:2px;"><strong>ID:</strong> <code style="font-size:10px; opacity:0.75;">${d.id.substring(0, 16)}...</code></div>
+              </div>
+            </div>
+            <div class="device-actions">
+              <button class="btn-action btn-connect" onclick="reconnectDevice('${d.number}', '${d.ws_url}', '${d.endpoint}')" title="Autenticar / Mostrar QR Code">
+                🔗 QR
+              </button>
+              <button class="btn-action btn-test" onclick="testDevice('${d.number}', '${d.endpoint}')" title="Testar Envio">
+                💬 Testar
+              </button>
+              <button class="btn-action btn-delete" onclick="deleteDevice('${d.number}')" title="Destruir Instância">
+                🗑️
+              </button>
+            </div>
+          `;
+          listEl.appendChild(item);
+        });
+      } catch (e) {
+        listEl.innerHTML = `
+          <div class="error-state">
+            ⚠️ Erro ao listar dispositivos: ${e.message}
+          </div>
+        `;
+      }
+    }
+
+    // ── Ação de reconectar (abrir canal do QR code de um container existente) ──
+    function reconnectDevice(number, wsUrl, endpoint) {
+      reset();
+      currentPhone = number;
+      currentServer = document.getElementById('server').value.replace(/\/$/, '').trim();
+      currentEndpoint = endpoint;
+      
+      document.getElementById('phone').value = number;
+      setStatus(`🔗 Conectando ao container existente do número ${number}...`, 'info');
+      setStep(3);
+      startWS(wsUrl);
+    }
+
+    // ── Ação de testar envio (ir direto para tela de teste preenchida com o container selecionado) ──
+    function testDevice(number, endpoint) {
+      reset();
+      currentPhone = number;
+      currentServer = document.getElementById('server').value.replace(/\/$/, '').trim();
+      currentEndpoint = endpoint;
+      
+      document.getElementById('phone').value = number;
+      onConnected();
+    }
+
+    // ── Ação de excluir / destruir container ──
+    async function deleteDevice(number) {
+      if (!confirm(`Tem certeza que deseja destruir o container da instância para o número ${number}?\nEsta ação é irreversível e apagará a sessão.`)) {
+        return;
+      }
+      
+      const serverInput = document.getElementById('server').value.replace(/\/$/, '').trim();
+      setStatus(`🗑️ Destruindo instância para ${number}...`, 'info');
+      
+      try {
+        const r = await fetch(`${serverInput}/delete`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: number })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        
+        setStatus(`✅ Container do número ${number} foi excluído com sucesso!`, 'ok');
+        
+        // Se a instância excluída era a que estava ativa na tela de teste, reseta a tela
+        if (currentPhone === number) {
+          reset();
+        } else {
+          loadDevices();
+        }
+      } catch (e) {
+        setStatus(`❌ Erro ao excluir: ${e.message}`, 'err');
+      }
+    }
 
     // ── helpers ──────────────────────────────────────────
     function setStatus(msg, type = 'info') {
@@ -631,12 +1043,14 @@
       }, 2000);
     }
 
+    // Função para mostrar elementos HTML
     function show(...ids) { 
       ids.forEach(id => {
         document.getElementById(id).style.display = (id === 'qr-wrap') ? 'flex' : 'block';
       }); 
     }
     
+    // Função para ocultar elementos HTML
     function hide(...ids) { ids.forEach(id => document.getElementById(id).style.display = 'none'); }
 
     // ── Step 2: criar instância ───────────────────────────
@@ -745,6 +1159,9 @@
       document.getElementById('connected-badge').style.display = 'flex';
       document.getElementById('instance-url').value = currentEndpoint; // Mostra o endpoint dinâmico criado
       document.getElementById('send-to').value = '';
+      
+      // Recarrega a lista do Docker automaticamente ao conectar com sucesso
+      loadDevices();
     }
 
     // ── Enviar mensagem de teste ──────────────────────────
@@ -794,6 +1211,9 @@
       document.getElementById('qr-pic').src = '';
       document.getElementById('send-result').style.display = 'none';
       currentEndpoint = '';
+      
+      // Recarrega a lista do Docker
+      loadDevices();
     }
 
     // Enter no campo número
