@@ -446,6 +446,44 @@
       border-top: 1px solid var(--card-border);
       margin: 24px 0;
     }
+
+    /* Card para URL da Instância */
+    .endpoint-card {
+      background: rgba(10, 12, 20, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      margin-top: 10px;
+    }
+    
+    .endpoint-card label {
+      font-size: 11px;
+      color: var(--primary-color);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    
+    .endpoint-card p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    
+    .copy-container {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .copy-container input {
+      flex: 1;
+      font-family: monospace;
+      font-size: 13px;
+      background: rgba(0, 0, 0, 0.3);
+      border-color: rgba(255, 255, 255, 0.05);
+      color: #a3b3d1;
+    }
   </style>
 </head>
 
@@ -505,6 +543,17 @@
         <div class="pulse-dot"></div>
         Instância Conectada e Pronta!
       </div>
+      
+      <!-- Nova URL da Instância Criada -->
+      <div class="endpoint-card">
+        <label>🔗 URL da Instância Dedicada (Porta Dinâmica)</label>
+        <p>Utilize esta URL em seu sistema integrado para realizar disparos ou gerenciar este container.</p>
+        <div class="copy-container">
+          <input id="instance-url" type="text" readonly value="" onclick="this.select()" />
+          <button id="btn-copy" onclick="copyEndpoint()" style="padding: 10px 14px; font-size: 12px; font-weight: 600;">Copiar</button>
+        </div>
+      </div>
+
       <hr />
       <h3>📤 Testar Envio de Mensagem</h3>
       <div class="send-field">
@@ -530,6 +579,7 @@
     let ws = null;
     let currentServer = '';
     let currentPhone = '';
+    let currentEndpoint = '';
 
     // ── Auto-detecção inteligente do Servidor Master no carregamento ──
     window.addEventListener('DOMContentLoaded', () => {
@@ -559,6 +609,26 @@
         const el = document.getElementById(id);
         el.className = 'step' + (i + 1 === n ? ' active' : i + 1 < n ? ' done' : '');
       });
+    }
+
+    // Função de cópia com feedback visual premium
+    function copyEndpoint() {
+      const copyText = document.getElementById("instance-url");
+      copyText.select();
+      copyText.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(copyText.value);
+      
+      const copyBtn = document.getElementById("btn-copy");
+      const originalText = copyBtn.innerText;
+      copyBtn.innerText = "Copiado! ✓";
+      copyBtn.style.background = "#25d366";
+      copyBtn.style.color = "#000";
+      
+      setTimeout(() => {
+        copyBtn.innerText = originalText;
+        copyBtn.style.background = "";
+        copyBtn.style.color = "";
+      }, 2000);
     }
 
     function show(...ids) { 
@@ -599,6 +669,7 @@
         return;
       }
 
+      currentEndpoint = resp.endpoint; // Guarda a URL dinâmica da instância
       setStatus(`✅ Container iniciado! Redirecionando WebSocket...`, 'ok');
       setStep(3);
       startWS(resp.ws_url);
@@ -672,6 +743,7 @@
       setStatus('');
       show('send-wrap');
       document.getElementById('connected-badge').style.display = 'flex';
+      document.getElementById('instance-url').value = currentEndpoint; // Mostra o endpoint dinâmico criado
       document.getElementById('send-to').value = '';
     }
 
@@ -721,6 +793,7 @@
       document.getElementById('phone').value = '';
       document.getElementById('qr-pic').src = '';
       document.getElementById('send-result').style.display = 'none';
+      currentEndpoint = '';
     }
 
     // Enter no campo número
