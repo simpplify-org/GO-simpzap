@@ -1,12 +1,16 @@
 package whatsapp
 
 import (
+	"bufio"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"github.com/fsouza/go-dockerclient"
 	"log"
+	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -161,9 +165,32 @@ func (dm *DockerManager) RemoveContainer(ctx context.Context, id string) error {
 }
 
 func (dm *DockerManager) getDockerHost() string {
-	// normalmente, se rodando localmente, use localhost; se remoto, configure DOCKER_BRIDGE_HOST
+	// 1. Tenta var de ambiente primeiro
 	if h := os.Getenv("DOCKER_BRIDGE_HOST"); h != "" {
 		return h
 	}
-	return "52.23.179.22"
+
+	// 2. Tenta descobrir o default gateway (IP do host Docker na rede bridge) via /proc/net/route
+	file, err := os.Open("/proc/net/route")
+	if err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			fields := strings.Fields(scanner.Text())
+			if len(fields) >= 3 && fields[1] == "00000000" { // default route
+				ipHex := fields[2]
+				if len(ipHex) == 8 {
+					// O IP está em little-endian hex (ex: 010011AC para 172.17.0.1)
+					decoded, err := hex.DecodeString(ipHex)
+					if err == nil && len(decoded) == 4 {
+						ip := net.IPv4(decoded[3], decoded[2], decoded[1], decoded[0])
+						return ip.String()
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Fallback clássico para bridge principal do docker ou Mac/Windows
+	return "172.17.0.1"
 }
