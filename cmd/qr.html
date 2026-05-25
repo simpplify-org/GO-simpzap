@@ -460,6 +460,10 @@
       let data;
       try { data = JSON.parse(event.data); } catch { return; }
 
+      if (data.error) {
+        setStatus('❌ Erro WS: ' + data.error, 'err');
+        return;
+      }
       switch (data.event) {
         case 'qr':
           setStatus('📷 Escaneie o QR Code no WhatsApp.', 'info');
