@@ -152,12 +152,26 @@ func (s *ZapPkg) ProxyHandler() http.Handler {
 		r.URL.Path = singleJoiningSlash("/", r.URL.Path[len(stripPrefix):])
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
+		
+		// Preservar cabeçalhos de WebSocket que podem ser removidos pelo reverse proxy padrão do Go
+		originalDirector := proxy.Director
+		proxy.Director = func(req *http.Request) {
+			originalDirector(req)
+			
+			// Se for um upgrade de WebSocket, garante que os cabeçalhos cruciais sejam explicitamente passados ao child
+			if r.Header.Get("Upgrade") != "" {
+				req.Header.Set("Upgrade", r.Header.Get("Upgrade"))
+				req.Header.Set("Connection", "Upgrade")
+			}
+		}
+
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Printf("[Proxy Error] falha no proxy para %s: %v", target.String(), err)
 			http.Error(w, "Proxy error: "+err.Error(), http.StatusBadGateway)
 		}
 		
-		log.Printf("[Proxy] Encaminhando req %s para %s (Path: %s)", r.Method, target.String(), r.URL.Path)
+		isWebSocket := r.Header.Get("Upgrade") != ""
+		log.Printf("[Proxy] Encaminhando req %s para %s (Path: %s) [WS: %t]", r.Method, target.String(), r.URL.Path, isWebSocket)
 		proxy.ServeHTTP(w, r)
 	})
 
