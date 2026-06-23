@@ -27,11 +27,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dev-go-simpzap-container
+    container_name: prod-go-simpzap-container
     env_file:
       - .env.prod
     ports:
-      - "3372:8080"
+      - "9972:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
