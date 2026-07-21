@@ -1,0 +1,153 @@
+when:
+  event: push
+
+steps:
+  # ============================
+  # DEPLOY MAIN (PROD)
+  # ============================
+  - name: deploy-main
+    image: alpine
+    when:
+      event: push
+      branch: main
+
+    environment:
+      SSH_KEY:
+        from_secret: EC2_SSH_KEY
+      EC2_HOST:
+        from_secret: EC2_PUBLIC_IP
+      EC2_USER: ubuntu
+
+    commands:
+      - apk add --no-cache openssh-client git docker-cli docker-compose
+
+      - echo "$SSH_KEY" > private_key.pem
+      - chmod 600 private_key.pem
+
+      - |
+        ssh -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=60 \
+            -o ServerAliveCountMax=10 \
+            -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+        set -e
+
+        echo ">>> Acessando diretório do projeto (prod)..."
+        cd /home/ubuntu/projects/GO-simpzap
+
+        echo ">>> Atualizando código (prod)..."
+        git fetch --all
+        git checkout main
+        git pull origin main
+
+        echo ">>> Atualizando imagem zap-client..."
+        docker compose build --no-cache zap-client
+
+        echo ">>> Subindo container prod..."
+        docker compose build prod-go-simpzap-container
+        docker compose up -d prod-go-simpzap-container
+
+        echo ">>> Limpando imagens antigas..."
+        docker image prune -f
+        EOF
+
+      - rm -f private_key.pem
+
+  # ============================
+  # DEPLOY DEVELOP
+  # ============================
+  - name: deploy-develop
+    image: alpine
+    when:
+      event: push
+      branch: develop
+
+    environment:
+      SSH_KEY:
+        from_secret: EC2_SSH_KEY_DEV_HML
+      EC2_HOST:
+        from_secret: EC2_PUBLIC_IP_DEV_HML
+      EC2_USER: ubuntu
+
+    commands:
+      - apk add --no-cache openssh-client git docker-cli docker-compose
+
+      - echo "$SSH_KEY" > private_key.pem
+      - chmod 600 private_key.pem
+
+      - |
+        ssh -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=60 \
+            -o ServerAliveCountMax=10 \
+            -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+        set -e
+
+        echo ">>> Acessando diretório do projeto (dev)..."
+        cd /home/ubuntu/projects/GO-simpzap
+
+        echo ">>> Atualizando código (dev)..."
+        git fetch --all
+        git checkout develop
+        git pull origin develop
+
+        echo ">>> Atualizando imagem zap-client..."
+        docker compose build --no-cache zap-client
+
+        echo ">>> Subindo container dev..."
+        docker compose build dev-go-simpzap-container
+        docker compose up -d dev-go-simpzap-container
+
+        echo ">>> Limpando imagens antigas..."
+        docker image prune -f
+        EOF
+
+      - rm -f private_key.pem
+
+  # ============================
+  # DEPLOY HOMOLOG
+  # ============================
+  - name: deploy-homolog
+    image: alpine
+    when:
+      event: push
+      branch: homolog
+
+    environment:
+      SSH_KEY:
+        from_secret: EC2_SSH_KEY_DEV_HML
+      EC2_HOST:
+        from_secret: EC2_PUBLIC_IP_DEV_HML
+      EC2_USER: ubuntu
+
+    commands:
+      - apk add --no-cache openssh-client git docker-cli docker-compose
+
+      - echo "$SSH_KEY" > private_key.pem
+      - chmod 600 private_key.pem
+
+      - |
+        ssh -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=60 \
+            -o ServerAliveCountMax=10 \
+            -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+        set -e
+
+        echo ">>> Acessando diretório do projeto (homolog)..."
+        cd /home/ubuntu/projects/GO-simpzap
+
+        echo ">>> Atualizando código (homolog)..."
+        git fetch --all
+        git checkout homolog
+        git pull origin homolog
+
+        echo ">>> Atualizando imagem zap-client..."
+        docker compose build --no-cache zap-client
+
+        echo ">>> Subindo container homolog..."
+        docker compose build homolog-go-simpzap-container
+        docker compose up -d homolog-go-simpzap-container
+
+        echo ">>> Limpando imagens antigas..."
+        docker image prune -f
+        EOF
+
+      - rm -f private_key.pem

@@ -16,8 +16,8 @@ jobs:
       - name: Conectar ao EC2 e Atualizar o Container dev
         env:
           EC2_USER: ubuntu
-          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP_DEV_HML }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY_DEV_HML }}
         run: |
           echo "$SSH_KEY" > private_key.pem
           chmod 600 private_key.pem
@@ -32,15 +32,12 @@ jobs:
             git checkout develop
             git pull origin develop
 
-            echo ">>> Construindo imagem Docker (dev)..."
-            docker build -t go-simpzap-dev .
+            echo ">>> Atualizando imagem zap-client..."
+            docker compose build --no-cache zap-client
 
-            echo ">>> Parando container antigo (dev)..."
-            docker ps -q -f name=go-simpzap-dev-container && docker stop go-simpzap-dev-container || true
-            docker ps -a -q -f name=go-simpzap-dev-container && docker rm go-simpzap-dev-container || true
-
-            echo ">>> Executando novo container (dev)..."
-            docker run -d -p 3372:8080 --env-file .env.dev --name go-simpzap-dev-container go-simpzap-dev
+            echo ">>> Subindo container..."
+            docker compose build dev-go-simpzap-container
+            docker compose up -d dev-go-simpzap-container
 
             echo ">>> Limpando imagens antigas..."
             docker image prune -f
@@ -61,8 +58,8 @@ jobs:
       - name: Conectar ao EC2 e Atualizar o Container homolog
         env:
           EC2_USER: ubuntu
-          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP }}
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_PUBLIC_IP_DEV_HML }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY_DEV_HML }}
         run: |
           echo "$SSH_KEY" > private_key.pem
           chmod 600 private_key.pem
@@ -77,15 +74,12 @@ jobs:
             git checkout homolog
             git pull origin homolog
 
-            echo ">>> Construindo imagem Docker (homolog)..."
-            docker build -t go-simpzap-homolog .
+            echo ">>> Atualizando imagem zap-client..."
+            docker compose build --no-cache zap-client
 
-            echo ">>> Parando container antigo (homolog)..."
-            docker ps -q -f name=go-simpzap-homolog-container && docker stop go-simpzap-homolog-container || true
-            docker ps -a -q -f name=go-simpzap-homolog-container && docker rm go-simpzap-homolog-container || true
-
-            echo ">>> Executando novo container (homolog)..."
-            docker run -d -p 6672:8080 --env-file .env.homolog --name go-simpzap-homolog-container go-simpzap-homolog
+            echo ">>> Subindo container..."
+            docker compose build homolog-go-simpzap-container
+            docker compose up -d homolog-go-simpzap-container
 
             echo ">>> Limpando imagens antigas..."
             docker image prune -f
@@ -121,16 +115,13 @@ jobs:
             git fetch --all
             git checkout main
             git pull origin main
+          
+            echo ">>> Atualizando imagem zap-client..."
+            docker compose build --no-cache zap-client
 
-            echo ">>> Construindo imagem Docker (prod)..."
-            docker build -t go-simpzap-prod .
-
-            echo ">>> Parando container antigo (prod)..."
-            docker ps -q -f name=go-simpzap-prod-container && docker stop go-simpzap-prod-container || true
-            docker ps -a -q -f name=go-simpzap-prod-container && docker rm go-simpzap-prod-container || true
-
-            echo ">>> Executando novo container (prod)..."
-            docker run -d -p 9972:8080 --env-file .env.prod --name go-simpzap-prod-container go-simpzap-prod
+            echo ">>> Subindo container..."
+            docker compose build prod-go-simpzap-container
+            docker compose up -d prod-go-simpzap-container
 
             echo ">>> Limpando imagens antigas..."
             docker image prune -f

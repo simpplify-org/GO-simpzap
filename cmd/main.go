@@ -2,56 +2,89 @@ package main
 
 import (
 	"context"
+	_ "embed"
+	"errors"
 	"log"
 	"os"
 
-	"github.com/labstack/echo/v4/middleware"
-
-	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
-	"github.com/simpplify-org/GO-data-connector-lib/slack"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/simpplify-org/GO-simpzap/app"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/simpplify-org/GO-simpzap/pkg/authstore"
 )
 
-func main() {
-	if os.Getenv("MONGO_URI") == "" {
-		if err := godotenv.Load(".env"); err != nil {
-			panic("Error loading env file")
-		}
-	}
+//go:embed qr.html
+var dashHTML []byte
 
-	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(os.Getenv("MONGO_URI")))
+//go:embed login.html
+var loginHTML []byte
+
+// bootstrapAdmin cria o primeiro usuário admin a partir das variáveis de
+// ambiente ADMIN_USER/ADMIN_PASSWORD, caso ainda não exista nenhum usuário.
+// Assim cada ambiente (dev/homolog/prod) já sobe com um login pronto, sem
+// precisar de um passo manual após o deploy. Usuários extras podem ser
+// criados depois via POST /users (autenticado).
+func bootstrapAdmin(store *authstore.Store) {
+	ctx := context.Background()
+
+	count, err := store.CountUsers(ctx)
 	if err != nil {
-		log.Fatal("Erro ao conectar ao MongoDB: ", err)
+		log.Fatalf("[AUTH] erro ao checar usuários existentes: %v", err)
+	}
+	if count > 0 {
+		return
 	}
 
-	db := mongoClient.Database("simpzap")
-
-	config := slack.Config{
-		SlackToken:        os.Getenv("SLACK_TOKEN"),
-		ChannelID:         os.Getenv("SLACK_CHANNEL"),
-		CriticalChannelID: os.Getenv("SLACK_CRITICAL_CHANNEL"),
-		OnlyPanics:        false,
-		Debug:             false,
-		Timeout:           0,
+	adminUser := os.Getenv("ADMIN_USER")
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminUser == "" || adminPassword == "" {
+		log.Println("[AUTH] Nenhum usuário cadastrado e ADMIN_USER/ADMIN_PASSWORD não definidos — /dash ficará inacessível até criar um usuário.")
+		return
 	}
-	reporter := slack.New(config)
 
-	deviceRepo := app.NewDeviceRepository(db)
-	messageRepo := app.NewMessageHistoryRepository(db)
-	listContactRepo := app.NewContactListRepository(db)
-	waService := app.NewWhatsAppService(deviceRepo, messageRepo, listContactRepo)
-	waHandler := app.NewWhatsAppHandler(waService, reporter)
+	if err := store.CreateUser(ctx, adminUser, adminPassword); err != nil && !errors.Is(err, authstore.ErrUserExists) {
+		log.Fatalf("[AUTH] erro ao criar usuário admin inicial: %v", err)
+	}
+	log.Printf("[AUTH] Usuário admin '%s' criado a partir do .env", adminUser)
+}
+
+func main() {
+	ctx := context.Background()
+
+	//TODO conectar ao banco de dados
+	//TODO conecta ao repositorio com a conexao do banco
+
+	if err := os.MkdirAll(".data", 0755); err != nil {
+		log.Fatalf("[MAIN] erro ao criar diretório .data: %v", err)
+	}
+
+	authDBPath := os.Getenv("AUTH_DB_PATH")
+	if authDBPath == "" {
+		authDBPath = ".data/master.db"
+	}
+	authStore, err := authstore.New(authDBPath)
+	if err != nil {
+		log.Fatalf("[AUTH] erro ao abrir banco de autenticação: %v", err)
+	}
+	bootstrapAdmin(authStore)
+
+	svc := app.NewWhatsAppService(ctx) //add adiciona o repositorio do webhook
+	authHandler := app.NewAuthHandler(authStore)
+	h := app.NewWhatsAppHandler(svc, authHandler)
+	h.DashHTML = dashHTML
+	h.LoginHTML = loginHTML
 
 	e := echo.New()
-
+	e.Use(middleware.Recover())
+	e.Use(middleware.Logger())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"}, // ou "*"
-		AllowMethods: []string{echo.GET, echo.POST, echo.OPTIONS, echo.DELETE},
+		AllowOrigins: []string{"*"},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
 	}))
 
-	waHandler.RegisterRoutes(e)
-	e.Logger.Fatal(e.Start(":8080"))
+	h.RegisterRoutes(e)
+
+	addr := ":8080"
+	log.Printf("[MAIN] Servidor iniciado em %s", addr)
+	e.Logger.Fatal(e.Start(addr))
 }

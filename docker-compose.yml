@@ -1,0 +1,62 @@
+services:
+  dev-go-simpzap-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dev-go-simpzap-container
+    env_file:
+      - .env.dev
+    environment:
+      - DOCKER_BRIDGE_HOST=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3372:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dev-go-simpzap-data:/app/.data
+
+  homolog-go-simpzap-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: homolog-go-simpzap-container
+    env_file:
+      - .env.homolog
+    environment:
+      - DOCKER_BRIDGE_HOST=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "6672:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - homolog-go-simpzap-data:/app/.data
+
+  prod-go-simpzap-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prod-go-simpzap-container
+    env_file:
+      - .env.prod
+    environment:
+      - DOCKER_BRIDGE_HOST=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9972:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - prod-go-simpzap-data:/app/.data
+
+  zap-client:
+    build:
+      context: .
+      dockerfile: client.Dockerfile
+    image: zap-client:latest
+
+volumes:
+  dev-go-simpzap-data:
+  homolog-go-simpzap-data:
+  prod-go-simpzap-data:
