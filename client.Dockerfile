@@ -21,6 +21,8 @@ WORKDIR /app
 
 RUN apk add --no-cache sqlite-libs
 
+RUN mkdir /app/data && chmod 755 /app/data
+
 COPY --from=builder /zap-client .
 
 ENV PHONE_NUMBER=default

@@ -72,6 +72,13 @@ func (dm *DockerManager) StartContainer(ctx context.Context, image, namePrefix s
 		return nil, err
 	}
 
+	// Volume nomeado por device (sem timestamp, ao contrário do nome do
+	// container) para que a sessão do WhatsApp (data/device.db) sobreviva a
+	// crash/recriação do container — sem isso, cada queda exigiria escanear o
+	// QR novamente. É removido explicitamente em RemoveContainer quando o
+	// device é de fato excluído (RemoveVolumes: true).
+	volumeName := namePrefix + "-data"
+
 	container, err := dm.client.CreateContainer(docker.CreateContainerOptions{
 		Name: name,
 		Config: &docker.Config{
@@ -82,7 +89,12 @@ func (dm *DockerManager) StartContainer(ctx context.Context, image, namePrefix s
 		},
 		HostConfig: &docker.HostConfig{
 			PortBindings: portBindings,
-			AutoRemove:   true,
+			Binds:        []string{fmt.Sprintf("%s:/app/data", volumeName)},
+			// unless-stopped em vez de AutoRemove: se o processo cair (OOM,
+			// crash), o Docker reinicia o container automaticamente e o
+			// serviço reconecta sozinho no boot (ver cmd/client/main.go),
+			// reaproveitando a sessão persistida no volume acima.
+			RestartPolicy: docker.RestartPolicy{Name: "unless-stopped"},
 		},
 	})
 	if err != nil {

@@ -4,7 +4,13 @@ import (
 	"context"
 	"github.com/simpplify-org/GO-simpzap/pkg/whatsapp"
 	"net/http"
+	"time"
 )
+
+// healthMonitorInterval define a frequência com que o master revalida os
+// devices registrados (containers vivos + sessão do WhatsApp). Ver
+// ZapPkg.StartHealthMonitor.
+const healthMonitorInterval = 30 * time.Second
 
 type WhatsAppService struct {
 	Zap *whatsapp.ZapPkg
@@ -12,8 +18,11 @@ type WhatsAppService struct {
 }
 
 func NewWhatsAppService(ctx context.Context) *WhatsAppService {
+	zap := whatsapp.NewZapPkg()
+	zap.StartHealthMonitor(ctx, healthMonitorInterval)
+
 	return &WhatsAppService{
-		Zap: whatsapp.NewZapPkg(),
+		Zap: zap,
 		Ctx: ctx,
 	}
 }

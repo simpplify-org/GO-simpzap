@@ -10,7 +10,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/skip2/go-qrcode"
 
@@ -39,6 +41,27 @@ type WhatsAppService struct {
 	dbContainer *sqlstore.Container
 	webhooks    map[string][]WebhookRule // Mapeia número de telefone para regras de webhook
 	mu          sync.RWMutex             // Mutex para proteger o mapa de webhooks
+
+	stateMu     sync.RWMutex // Mutex para proteger lastEvent/lastEventAt
+	lastEvent   string
+	lastEventAt time.Time
+}
+
+// ConnectionStatus resume o estado da conexão com o WhatsApp para consumo
+// pelos serviços externos (via GET /status) e pelo health monitor do master.
+// Existe para que quem chama /send não fique "no escuro" quando a conexão
+// cai: em vez de só receber um erro genérico, dá pra checar antecipadamente
+// (ou interpretar o campo "reason" do erro de /send) se é uma queda
+// transitória (NeedsQR=false, o processo reconecta sozinho) ou se exige
+// intervenção humana (NeedsQR=true, sessão foi deslogada de vez).
+type ConnectionStatus struct {
+	PhoneNumber string    `json:"phone_number"`
+	Connected   bool      `json:"connected"`
+	LoggedIn    bool      `json:"logged_in"`
+	HasSession  bool      `json:"has_session"`
+	NeedsQR     bool      `json:"needs_qr"`
+	LastEvent   string    `json:"last_event,omitempty"`
+	LastEventAt time.Time `json:"last_event_at"`
 }
 
 // NewWhatsAppService é o construtor para WhatsAppService.
@@ -46,7 +69,13 @@ func NewWhatsAppService(ctx context.Context, phoneNumber string) (*WhatsAppServi
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
 	clientLog := waLog.Stdout("Client", "DEBUG", true)
 
-	container, err := sqlstore.New(ctx, "sqlite3", "file:device.db?_foreign_keys=on", dbLog)
+	// "data/" fica num volume Docker dedicado (ver docker_manager.go), para que
+	// a sessão sobreviva a crash/recriação do container sem exigir novo QR.
+	if err := os.MkdirAll("data", 0755); err != nil {
+		return nil, fmt.Errorf("erro ao criar diretório data: %w", err)
+	}
+
+	container, err := sqlstore.New(ctx, "sqlite3", "file:data/device.db?_foreign_keys=on", dbLog)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao abrir sqlstore: %w", err)
 	}
@@ -114,6 +143,35 @@ func (s *WhatsAppService) HasID() bool {
 	return s.client.Store.ID != nil
 }
 
+// Status retorna o estado atual da conexão. NeedsQR reflete diretamente
+// client.Store.ID: o whatsmeow apaga o store automaticamente quando recebe
+// um LoggedOut real (device removido / logout no celular), então "sem
+// sessão" e "precisa de novo QR" são a mesma coisa — não é preciso rastrear
+// isso manualmente.
+func (s *WhatsAppService) Status() ConnectionStatus {
+	s.stateMu.RLock()
+	lastEvent, lastEventAt := s.lastEvent, s.lastEventAt
+	s.stateMu.RUnlock()
+
+	hasSession := s.HasID()
+	return ConnectionStatus{
+		PhoneNumber: s.phoneNumber,
+		Connected:   s.IsConnected(),
+		LoggedIn:    s.client.IsLoggedIn(),
+		HasSession:  hasSession,
+		NeedsQR:     !hasSession,
+		LastEvent:   lastEvent,
+		LastEventAt: lastEventAt,
+	}
+}
+
+func (s *WhatsAppService) setLastEvent(name string) {
+	s.stateMu.Lock()
+	s.lastEvent = name
+	s.lastEventAt = time.Now()
+	s.stateMu.Unlock()
+}
+
 // SendMessage envia uma mensagem de texto para um número.
 func (s *WhatsAppService) SendMessage(number, message string) (whatsmeow.SendResponse, error) {
 	if !s.IsConnected() {
@@ -151,13 +209,17 @@ func (s *WhatsAppService) eventHandler(evt interface{}) {
 	case *events.Message:
 		s.handleMessageEvent(v)
 	case *events.Connected:
+		s.setLastEvent("connected")
 		log.Println("✅ WhatsApp conectado com sucesso!")
 	case *events.Disconnected:
-		log.Println("❌ WhatsApp desconectado!")
+		s.setLastEvent("disconnected")
+		log.Println("❌ WhatsApp desconectado! (reconexão automática do whatsmeow deve assumir, se a sessão ainda for válida)")
 	case *events.StreamReplaced:
+		s.setLastEvent("stream_replaced")
 		log.Println("⚠️ Sessão substituída em outro dispositivo.")
 	case *events.LoggedOut:
-		log.Println("🚪 Logout realizado — sessão expirada.")
+		s.setLastEvent("logged_out")
+		log.Println("🚪 Logout realizado — sessão expirada, será necessário escanear um novo QR Code.")
 	default:
 		// log.Printf("🌀 Evento: %+v\n", v) // Comentado para reduzir o ruído do log
 	}

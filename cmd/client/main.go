@@ -122,6 +122,38 @@ func handleConnectWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// writeJSONError responde com um corpo JSON estruturado em vez de texto puro,
+// para que os serviços que chamam /send e /send/many consigam DIFERENCIAR
+// programaticamente por que a mensagem não foi enviada — em especial, se foi
+// por perda de conexão (reason "not_connected", transitório, o processo
+// reconecta sozinho) ou por sessão deslogada de vez (reason "needs_qr",
+// exige reescanear o QR em /connect/ws). Hoje eles só sabem que "deu ruim".
+func writeJSONError(w http.ResponseWriter, status int, reason, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "error",
+		"reason":  reason,
+		"message": message,
+	})
+}
+
+// connectivityError retorna (reason, message) apropriados para o estado
+// atual da conexão, ou ("", "") se estiver tudo certo para enviar.
+func connectivityError() (reason string, message string) {
+	if service == nil {
+		return "not_initialized", "Serviço WhatsApp não inicializado"
+	}
+	status := service.Status()
+	if status.NeedsQR {
+		return "needs_qr", "Sessão perdida (logout) — é necessário escanear um novo QR Code em /connect/ws"
+	}
+	if !status.Connected {
+		return "not_connected", "Cliente WhatsApp temporariamente desconectado — a sessão está tentando reconectar automaticamente, tente novamente em instantes"
+	}
+	return "", ""
+}
+
 // handleSendMessage - POST /send — envia para um número
 func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	type SendRequest struct {
@@ -135,8 +167,8 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if service == nil || !service.IsConnected() {
-		http.Error(w, "Cliente WhatsApp não conectado", http.StatusServiceUnavailable)
+	if reason, message := connectivityError(); reason != "" {
+		writeJSONError(w, http.StatusServiceUnavailable, reason, message)
 		return
 	}
 
@@ -174,8 +206,8 @@ func handleSendManyMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if service == nil || !service.IsConnected() {
-		http.Error(w, "Cliente WhatsApp não conectado", http.StatusServiceUnavailable)
+	if reason, message := connectivityError(); reason != "" {
+		writeJSONError(w, http.StatusServiceUnavailable, reason, message)
 		return
 	}
 
@@ -204,6 +236,23 @@ func handleSendManyMessages(w http.ResponseWriter, r *http.Request) {
 		"status":  "ok",
 		"results": results,
 	})
+}
+
+// handleStatus - GET /status — estado da conexão, para os serviços consumidores
+// checarem proativamente (ou depois de um erro em /send) se a queda é
+// transitória ou se precisa de intervenção humana (novo QR).
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if service == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{
+			"connected": false,
+			"needs_qr":  true,
+			"reason":    "not_initialized",
+		})
+		return
+	}
+	json.NewEncoder(w).Encode(service.Status())
 }
 
 // handleRegisterWebhook - POST /webhook/register — registra um webhook de um numero
@@ -295,7 +344,22 @@ func main() {
 		log.Fatalf("Erro ao inicializar o serviço client WhatsApp: %v", err)
 	}
 
+	// Se já existe uma sessão pareada (persistida em disco), reconecta sozinho
+	// assim que o processo sobe — sem esperar alguém abrir /connect/ws e sem
+	// precisar de novo QR. Isso evita que um restart/crash do container derrube
+	// a funcionalidade até uma intervenção manual.
+	if service.HasID() {
+		go func() {
+			if err := service.Connect(); err != nil {
+				log.Printf("⚠️ Falha ao reconectar sessão existente no startup: %v\n", err)
+				return
+			}
+			log.Println("🔄 Sessão existente reconectada automaticamente no startup (sem QR).")
+		}()
+	}
+
 	http.HandleFunc("/connect/ws", handleConnectWS)
+	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/send", handleSendMessage)
 	http.HandleFunc("/send/many", handleSendManyMessages)
 	http.HandleFunc("/webhook/register", handleRegisterWebhook)

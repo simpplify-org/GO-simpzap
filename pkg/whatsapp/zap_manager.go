@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -179,6 +180,97 @@ func (s *ZapPkg) ProxyHandler() http.Handler {
 	})
 
 	return mux
+}
+
+// deviceStatus espelha (só os campos que interessam aqui) o JSON retornado
+// por GET /status no container filho (clientservice.ConnectionStatus).
+type deviceStatus struct {
+	Connected bool   `json:"connected"`
+	NeedsQR   bool   `json:"needs_qr"`
+	LastEvent string `json:"last_event"`
+}
+
+// StartHealthMonitor sobe um loop em background que revalida periodicamente
+// os devices registrados. Ele cobre dois casos que a auto-reconexão do
+// processo filho (whatsmeow + auto-connect no boot) não resolve sozinha:
+//
+//  1. Container caiu de vez (ex: crash + RestartPolicy ainda não recriou, ou
+//     foi removido por fora) — o cache s.devices fica com um endpoint morto,
+//     causando 502 no proxy até uma recriação manual. O monitor limpa essa
+//     entrada, e a próxima chamada via ProxyHandler recria o container.
+//  2. Sessão foi realmente deslogada (needs_qr) — o único caso que não se
+//     autorrecupera de jeito nenhum, precisa de alguém escanear o QR de
+//     novo. O monitor loga isso de forma destacada para virar alerta.
+func (s *ZapPkg) StartHealthMonitor(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.checkDevicesHealth(ctx)
+			}
+		}
+	}()
+	log.Printf("[HealthMonitor] iniciado (intervalo: %s)", interval)
+}
+
+func (s *ZapPkg) checkDevicesHealth(ctx context.Context) {
+	s.mu.RLock()
+	snapshot := make(map[string]*ClientContainer, len(s.devices))
+	for phoneNumber, cc := range s.devices {
+		snapshot[phoneNumber] = cc
+	}
+	s.mu.RUnlock()
+
+	for phoneNumber, cc := range snapshot {
+		inspect, err := s.dockerMgr.client.InspectContainerWithOptions(docker.InspectContainerOptions{ID: cc.ID})
+		if err != nil || !inspect.State.Running {
+			log.Printf("[HealthMonitor] ⚠️ container do device %s (ID=%s) não está mais rodando (err=%v) — removendo do cache; será recriado na próxima chamada", phoneNumber, cc.ID, err)
+			s.mu.Lock()
+			delete(s.devices, phoneNumber)
+			s.mu.Unlock()
+			continue
+		}
+
+		status, err := fetchDeviceStatus(ctx, cc.Endpoint)
+		if err != nil {
+			log.Printf("[HealthMonitor] ⚠️ não foi possível checar /status do device %s (%s): %v", phoneNumber, cc.Endpoint, err)
+			continue
+		}
+
+		switch {
+		case status.NeedsQR:
+			log.Printf("[HealthMonitor] 🚨 device %s perdeu a sessão (logout) — precisa escanear um novo QR Code em %s/connect/ws", phoneNumber, cc.Endpoint)
+		case !status.Connected:
+			log.Printf("[HealthMonitor] ⏳ device %s está com sessão válida mas desconectado no momento (last_event=%s) — deve reconectar sozinho", phoneNumber, status.LastEvent)
+		}
+	}
+}
+
+// fetchDeviceStatus consulta GET /status no container filho.
+func fetchDeviceStatus(ctx context.Context, endpoint string) (*deviceStatus, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint+"/status", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var status deviceStatus
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return nil, fmt.Errorf("resposta inválida de %s/status: %w", endpoint, err)
+	}
+	return &status, nil
 }
 
 type DeviceInfo struct {
