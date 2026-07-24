@@ -74,12 +74,25 @@ func main() {
 	h.DashHTML = dashHTML
 	h.LoginHTML = loginHTML
 
+	// DEVICE_API_KEY protege /create, /devices, /delete e /device/* com o
+	// header X-API-Key. Fica desligado (rotas abertas, igual hoje) até essa
+	// variável ser definida — dá pra atualizar os serviços consumidores com
+	// o header antes de ativar a exigência no master, sem quebrar nada no
+	// meio do caminho.
+	deviceAPIKey := os.Getenv("DEVICE_API_KEY")
+	if deviceAPIKey == "" {
+		log.Println("[MAIN] ⚠️  DEVICE_API_KEY não definida — /create, /devices, /delete e /device/* continuam sem autenticação.")
+	} else {
+		log.Println("[MAIN] 🔒 DEVICE_API_KEY definida — /create, /devices, /delete e /device/* agora exigem o header X-API-Key.")
+	}
+	h.APIKeyMiddleware = app.NewAPIKeyMiddleware(deviceAPIKey)
+
 	e := echo.New()
 	e.Use(middleware.Recover())
 	e.Use(middleware.Logger())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, "X-API-Key"},
 	}))
 
 	h.RegisterRoutes(e)

@@ -38,7 +38,9 @@ O sistema opera através de um fluxo de criação dinâmica:
 
 O `/dash` exige login. No primeiro start, se ainda não existir nenhum usuário, o Master cria um admin automaticamente a partir de `ADMIN_USER` e `ADMIN_PASSWORD` (definidos no `.env` de cada ambiente). Depois disso, novos usuários podem ser criados pelo próprio `/dash`, em **"👤 Gerenciar usuários"** (endpoint `POST /users`, exige estar logado).
 
-📌 **Nota:** por decisão de escopo, apenas a tela `/dash` exige login — os endpoints `/create`, `/devices`, `/delete` e o proxy `/device/*` continuam abertos, para não quebrar integrações que já chamam a API diretamente.
+📌 **Nota:** por decisão de escopo, apenas a tela `/dash` exige login — os endpoints `/create`, `/devices`, `/delete` e o proxy `/device/*` continuam abertos por padrão, para não quebrar integrações que já chamam a API diretamente.
+
+Para proteger esses endpoints sem alterar a forma de chamada (continua `/device/{numero}/...`, sem porta fixa), defina `DEVICE_API_KEY` no `.env` do master. A partir daí, toda chamada a `/create`, `/devices`, `/delete` e `/device/*` precisa enviar o header `X-API-Key: <mesmo valor>`. Atualize os serviços consumidores com esse header **antes** de definir a variável em produção, senão eles passam a receber `401`.
 
 ---
 

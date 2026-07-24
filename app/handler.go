@@ -11,10 +11,18 @@ type WhatsAppHandler struct {
 	Auth      *AuthHandler
 	DashHTML  []byte
 	LoginHTML []byte
+	// APIKeyMiddleware protege /create, /devices, /delete e /device/*. É
+	// no-op se DEVICE_API_KEY não estiver configurada (ver cmd/main.go).
+	APIKeyMiddleware echo.MiddlewareFunc
 }
 
 func NewWhatsAppHandler(svc *WhatsAppService, auth *AuthHandler) *WhatsAppHandler {
-	return &WhatsAppHandler{Service: svc, Auth: auth}
+	return &WhatsAppHandler{
+		Service: svc,
+		Auth:    auth,
+		// no-op por padrão; cmd/main.go sobrescreve com a chave real, se houver.
+		APIKeyMiddleware: NewAPIKeyMiddleware(""),
+	}
 }
 
 func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
@@ -24,10 +32,10 @@ func (h *WhatsAppHandler) RegisterRoutes(e *echo.Echo) {
 	e.POST("/users", h.Auth.CreateUser, h.Auth.RequireAuth)
 
 	e.GET("/dash", h.Dash, h.Auth.RequireAuth)
-	e.POST("/create", h.CreateDevice)
-	e.GET("/devices", h.ListDevices)
-	e.DELETE("/delete", h.DeleteDevice)
-	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyHandler())) //DIRECIONA PARA O CONTAINER CHILD
+	e.POST("/create", h.CreateDevice, h.APIKeyMiddleware)
+	e.GET("/devices", h.ListDevices, h.APIKeyMiddleware)
+	e.DELETE("/delete", h.DeleteDevice, h.APIKeyMiddleware)
+	e.Any("/device/*", echo.WrapHandler(h.Service.ProxyHandler()), h.APIKeyMiddleware) //DIRECIONA PARA O CONTAINER CHILD
 }
 
 func (h *WhatsAppHandler) Dash(c echo.Context) error {
