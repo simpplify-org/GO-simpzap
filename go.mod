@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/fsouza/go-dockerclient v1.12.3
+	github.com/getsentry/sentry-go v0.48.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/mattn/go-sqlite3 v1.14.48

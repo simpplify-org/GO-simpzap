@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/simpplify-org/GO-simpzap/cmd/client/clientservice"
+	"github.com/simpplify-org/GO-simpzap/pkg/alerting"
 
 	"github.com/gorilla/websocket"
 )
@@ -338,6 +339,9 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 // main com logs e shutdown gracioso
 func main() {
+	alerting.Init(os.Getenv("SENTRY_DSN"), os.Getenv("SENTRY_ENVIRONMENT"), "whats-client-"+phoneNumber)
+	defer alerting.Flush(2 * time.Second)
+
 	var err error
 	service, err = clientservice.NewWhatsAppService(ctx, phoneNumber)
 	if err != nil {

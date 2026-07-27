@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/fsouza/go-dockerclient"
+	"github.com/simpplify-org/GO-simpzap/pkg/alerting"
 )
 
 // Gerencia containers por device, faz proxy das chamadas.
@@ -22,6 +24,12 @@ type ZapPkg struct {
 	mu          sync.RWMutex
 	devices     map[string]*ClientContainer // key: deviceID // VAI SER SO O NUMERO MESMO
 	clientImage string                      // imagem do child (ex: "myrepo/whats-child:latest")
+
+	sentryDSN string // repassado como env SENTRY_DSN para os containers filhos
+	sentryEnv string // repassado como env SENTRY_ENVIRONMENT para os containers filhos
+
+	notifiedMu sync.Mutex
+	notified   map[string]string // phoneNumber -> último "reason" já reportado ao Sentry, para não duplicar issue a cada tick do health monitor
 }
 
 func NewZapPkg() *ZapPkg {
@@ -34,7 +42,34 @@ func NewZapPkg() *ZapPkg {
 		dockerMgr:   dm,
 		devices:     make(map[string]*ClientContainer),
 		clientImage: "zap-client:latest",
+		sentryDSN:   os.Getenv("SENTRY_DSN"),
+		sentryEnv:   os.Getenv("SENTRY_ENVIRONMENT"),
+		notified:    make(map[string]string),
 	}
+}
+
+// notifyOnce reporta phoneNumber/reason ao Sentry apenas na primeira vez que
+// esse motivo é visto (ou depois de resolvido e reincidente), evitando uma
+// issue nova a cada tick de 30s do health monitor enquanto o problema
+// persiste — o Sentry já agrupa ocorrências repetidas da mesma issue.
+func (s *ZapPkg) notifyOnce(phoneNumber, reason, message string) {
+	s.notifiedMu.Lock()
+	already := s.notified[phoneNumber] == reason
+	s.notified[phoneNumber] = reason
+	s.notifiedMu.Unlock()
+
+	if already {
+		return
+	}
+	alerting.CaptureSessionDown(phoneNumber, reason, message)
+}
+
+// clearNotified esquece o último motivo reportado, para que uma futura
+// recorrência do mesmo problema gere um novo alerta.
+func (s *ZapPkg) clearNotified(phoneNumber string) {
+	s.notifiedMu.Lock()
+	delete(s.notified, phoneNumber)
+	s.notifiedMu.Unlock()
 }
 
 // CreateDevice cria container para device, se já existir retorna o existente.
@@ -66,6 +101,15 @@ func (s *ZapPkg) CreateDevice(ctx context.Context, phoneNumber string) (*ClientC
 	envs := []string{
 		fmt.Sprintf("PHONE_NUMBER=%s", phoneNumber),
 		fmt.Sprintf("LOG_LEVEL=info"),
+	}
+	// Repassa a config do Sentry para o container filho poder reportar a
+	// queda de sessão (LoggedOut/StreamReplaced) instantaneamente, assim que
+	// o evento acontece — sem depender do polling do health monitor.
+	if s.sentryDSN != "" {
+		envs = append(envs, fmt.Sprintf("SENTRY_DSN=%s", s.sentryDSN))
+	}
+	if s.sentryEnv != "" {
+		envs = append(envs, fmt.Sprintf("SENTRY_ENVIRONMENT=%s", s.sentryEnv))
 	}
 
 	cc, err := s.dockerMgr.StartContainer(ctx, s.clientImage, namePrefix, labels, envs)
@@ -232,6 +276,10 @@ func (s *ZapPkg) checkDevicesHealth(ctx context.Context) {
 			s.mu.Lock()
 			delete(s.devices, phoneNumber)
 			s.mu.Unlock()
+			// Alerta de backup: se o container morreu antes de conseguir avisar
+			// sozinho (ver alerting.CaptureSessionDown no client), o master
+			// ainda reporta a queda ao Sentry.
+			s.notifyOnce(phoneNumber, "container_down", fmt.Sprintf("container %s parou de responder (err=%v)", cc.ID, err))
 			continue
 		}
 
@@ -244,8 +292,13 @@ func (s *ZapPkg) checkDevicesHealth(ctx context.Context) {
 		switch {
 		case status.NeedsQR:
 			log.Printf("[HealthMonitor] 🚨 device %s perdeu a sessão (logout) — precisa escanear um novo QR Code em %s/connect/ws", phoneNumber, cc.Endpoint)
+			s.notifyOnce(phoneNumber, "needs_qr", fmt.Sprintf("sessão sem login válido — escaneie um novo QR em %s/connect/ws", cc.Endpoint))
 		case !status.Connected:
 			log.Printf("[HealthMonitor] ⏳ device %s está com sessão válida mas desconectado no momento (last_event=%s) — deve reconectar sozinho", phoneNumber, status.LastEvent)
+		default:
+			// Saudável de novo: limpa o estado para que uma futura recorrência
+			// gere um novo alerta em vez de ficar silenciada para sempre.
+			s.clearNotified(phoneNumber)
 		}
 	}
 }

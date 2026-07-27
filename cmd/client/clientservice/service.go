@@ -16,6 +16,8 @@ import (
 
 	"github.com/skip2/go-qrcode"
 
+	"github.com/simpplify-org/GO-simpzap/pkg/alerting"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -217,9 +219,11 @@ func (s *WhatsAppService) eventHandler(evt interface{}) {
 	case *events.StreamReplaced:
 		s.setLastEvent("stream_replaced")
 		log.Println("⚠️ Sessão substituída em outro dispositivo.")
+		alerting.CaptureSessionDown(s.phoneNumber, "stream_replaced", "sessão foi substituída por login em outro lugar — esta conexão foi encerrada")
 	case *events.LoggedOut:
 		s.setLastEvent("logged_out")
 		log.Println("🚪 Logout realizado — sessão expirada, será necessário escanear um novo QR Code.")
+		alerting.CaptureSessionDown(s.phoneNumber, "logged_out", "sessão deslogada — é necessário escanear um novo QR Code em /connect/ws")
 	default:
 		// log.Printf("🌀 Evento: %+v\n", v) // Comentado para reduzir o ruído do log
 	}

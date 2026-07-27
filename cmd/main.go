@@ -6,10 +6,12 @@ import (
 	"errors"
 	"log"
 	"os"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/simpplify-org/GO-simpzap/app"
+	"github.com/simpplify-org/GO-simpzap/pkg/alerting"
 	"github.com/simpplify-org/GO-simpzap/pkg/authstore"
 )
 
@@ -50,6 +52,9 @@ func bootstrapAdmin(store *authstore.Store) {
 
 func main() {
 	ctx := context.Background()
+
+	alerting.Init(os.Getenv("SENTRY_DSN"), os.Getenv("SENTRY_ENVIRONMENT"), "whats-master")
+	defer alerting.Flush(2 * time.Second)
 
 	//TODO conectar ao banco de dados
 	//TODO conecta ao repositorio com a conexao do banco
