@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/skip2/go-qrcode"
@@ -306,7 +307,7 @@ func EncodeQRToDataURL(qrCode string) (string, error) {
 }
 
 func (s *WhatsAppService) SendMedia(ctx context.Context, number string, filename string, mimeType string, caption string, data []byte) (whatsmeow.SendResponse, error) {
-	if s.Client == nil || !s.Client.IsConnected() {
+	if s.client == nil || !s.client.IsConnected() {
 		return whatsmeow.SendResponse{}, fmt.Errorf("cliente WhatsApp não conectado")
 	}
 

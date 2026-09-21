@@ -362,11 +362,12 @@ func handleSendMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, header, err := r.FormValue("file")
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "Campo file e obrigatorio", http.StatusBadRequest)
 		return
 	}
+	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
@@ -375,7 +376,7 @@ func handleSendMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(data) == 0 {
-		http.Error(w "Arquivo vazio", http.StatusBadRequest)
+		http.Error(w, "Arquivo vazio", http.StatusBadRequest)
 		return
 	}
 
@@ -387,7 +388,7 @@ func handleSendMedia(w http.ResponseWriter, r *http.Request) {
 		header.Filename,
 		mimeType,
 		caption,
-		data
+		data,
 	)
 	if err != nil {
 		log.Printf(
