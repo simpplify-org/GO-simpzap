@@ -16,6 +16,10 @@ import (
 	"github.com/simpplify-org/GO-simpzap/cmd/client/clientservice"
 
 	"github.com/gorilla/websocket"
+	"io"
+	"mime/multipart"
+	"path/filepath"
+	"strings"
 )
 
 var (
@@ -305,6 +309,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "ok")
 	})
+	http.HandleFunc("/send/media", handleSendMedia)
 
 	server := &http.Server{
 		Addr:    ":8080",
@@ -326,5 +331,123 @@ func main() {
 	log.Println("🧹 Encerrando cliente WhatsApp...")
 	if service != nil {
 		service.Disconnect()
+	}
+}
+
+const maxMediaSize = 25 << 20
+
+func handleSendMedia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Metodo nao permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if service == nil || !service.IsConnected() {
+		http.Error(w, "Cliente whatsapp nao conectado", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxMediaSize)
+
+	if err := r.ParseMultipartForm(maxMediaSize); err != nil {
+		http.Error(w, "Arquivo invalido ou maior que 25 MB", http.StatusBadRequest)
+		return
+	}
+
+	number := strings.TrimSpace(r.FormValue("number"))
+	caption := strings.TrimSpace(r.FormValue("message"))
+
+	if number == "" {
+		http.Error(w, "Numero invalido ou vazio", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormValue("file")
+	if err != nil {
+		http.Error(w, "Campo file e obrigatorio", http.StatusBadRequest)
+		return
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Erro ao ler o arquivo", http.StatusInternalServerError)
+		return
+	}
+
+	if len(data) == 0 {
+		http.Error(w "Arquivo vazio", http.StatusBadRequest)
+		return
+	}
+
+	mimeType := detectMediaType(header, data)
+
+	resp, err := service.SendMedia(
+		r.Context(),
+		number,
+		header.Filename,
+		mimeType,
+		caption,
+		data
+	)
+	if err != nil {
+		log.Printf(
+			"❌ Erro ao enviar mídia para %s: %v",
+			number,
+			err,
+		)
+
+		http.Error(
+			w,
+			fmt.Sprintf("Erro ao enviar mídia: %v", err),
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	log.Printf(
+		"✅ Mídia enviada para %s (ID: %s)",
+		number,
+		resp.ID,
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+		"id":     string(resp.ID),
+	})
+}
+
+
+func detectMediaType(
+	header *multipart.FileHeader,
+	data []byte,
+) string {
+	// DetectContentType utiliza os primeiros 512 bytes.
+	mimeType := http.DetectContentType(data)
+
+	// Alguns documentos podem ser identificados como octet-stream.
+	if mimeType != "application/octet-stream" {
+		return mimeType
+	}
+
+	switch strings.ToLower(filepath.Ext(header.Filename)) {
+	case ".pdf":
+		return "application/pdf"
+	case ".doc":
+		return "application/msword"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".xls":
+		return "application/vnd.ms-excel"
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case ".txt":
+		return "text/plain"
+	case ".csv":
+		return "text/csv"
+	default:
+		return mimeType
 	}
 }

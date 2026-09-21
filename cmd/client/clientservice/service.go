@@ -304,3 +304,86 @@ func EncodeQRToDataURL(qrCode string) (string, error) {
 	encoded := base64.StdEncoding.EncodeToString(img)
 	return "data:image/png;base64," + encoded, nil
 }
+
+func (s *WhatsAppService) SendMedia(ctx context.Context, number string, filename string, mimeType string, caption string, data []byte) (whatsmeow.SendResponse, error) {
+	if s.Client == nil || !s.Client.IsConnected() {
+		return whatsmeow.SendResponse{}, fmt.Errorf("cliente WhatsApp não conectado")
+	}
+
+	jid, err := parsePhoneNumber(number)
+	if err != nil {
+		return whatsmeow.SendResponse{}, fmt.Errorf("erro ao fazer parse do numero")
+	}
+
+	var (
+		message   *waE2E.Message
+		mediaType whatsmeow.MediaType
+	)
+
+	if strings.HasPrefix(mimeType, "image/") {
+		mediaType = whatsmeow.MediaImage
+	} else {
+		mediaType = whatsmeow.MediaDocument
+	}
+
+	uploaded, err := s.client.Upload(ctx, data, mediaType)
+	if err != nil {
+		return whatsmeow.SendResponse{}, fmt.Errorf("Erro ao fazer upload do anexo: %w", err)
+	}
+
+	switch mediaType {
+	case whatsmeow.MediaImage:
+		message = &waE2E.Message{
+			ImageMessage: &waE2E.ImageMessage{
+				Caption:       proto.String(caption),
+				Mimetype:      proto.String(mimeType),
+				URL:           proto.String(uploaded.URL),
+				DirectPath:    proto.String(uploaded.DirectPath),
+				MediaKey:      uploaded.MediaKey,
+				FileEncSHA256: uploaded.FileEncSHA256,
+				FileSHA256:    uploaded.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+			},
+		}
+
+	case whatsmeow.MediaDocument:
+		message = &waE2E.Message{
+			DocumentMessage: &waE2E.DocumentMessage{
+				Caption:       proto.String(caption),
+				FileName:      proto.String(filename),
+				Mimetype:      proto.String(mimeType),
+				URL:           proto.String(uploaded.URL),
+				DirectPath:    proto.String(uploaded.DirectPath),
+				MediaKey:      uploaded.MediaKey,
+				FileEncSHA256: uploaded.FileEncSHA256,
+				FileSHA256:    uploaded.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+			},
+		}
+	}
+
+	resp, err := s.client.SendMessage(ctx, jid, message)
+	if err != nil {
+		return whatsmeow.SendResponse{}, fmt.Errorf(
+			"erro ao enviar mídia: %w",
+			err,
+		)
+	}
+
+	return resp, nil
+}
+
+func parsePhoneNumber(number string) (types.JID, error) {
+	number = strings.TrimSpace(number)
+	number = strings.TrimPrefix(number, "+")
+	number = strings.ReplaceAll(number, " ", "")
+	number = strings.ReplaceAll(number, "-", "")
+	number = strings.ReplaceAll(number, "(", "")
+	number = strings.ReplaceAll(number, ")", "")
+
+	if number == "" {
+		return types.JID{}, fmt.Errorf("número vazio")
+	}
+
+	return types.NewJID(number, types.DefaultUserServer), nil
+}
