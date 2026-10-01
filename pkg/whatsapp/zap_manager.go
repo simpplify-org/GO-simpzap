@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -65,6 +66,11 @@ func (s *ZapPkg) CreateDevice(ctx context.Context, phoneNumber string) (*ClientC
 	envs := []string{
 		fmt.Sprintf("PHONE_NUMBER=%s", phoneNumber),
 		fmt.Sprintf("LOG_LEVEL=info"),
+	}
+	// Repassa o Postgres do master para o filho gravar o histórico de
+	// mensagens (ver pkg/msgstore). Sem ela o filho só não grava.
+	if dsn := os.Getenv("POSTGRES_DSN"); dsn != "" {
+		envs = append(envs, "POSTGRES_DSN="+dsn)
 	}
 
 	cc, err := s.dockerMgr.StartContainer(ctx, s.clientImage, namePrefix, labels, envs)
