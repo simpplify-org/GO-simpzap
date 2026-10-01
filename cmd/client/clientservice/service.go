@@ -10,9 +10,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
+	"github.com/simpplify-org/GO-simpzap/pkg/msgstore"
 	"github.com/skip2/go-qrcode"
 
 	"go.mau.fi/whatsmeow"
@@ -40,6 +42,7 @@ type WhatsAppService struct {
 	dbContainer *sqlstore.Container
 	webhooks    map[string][]WebhookRule // Mapeia número de telefone para regras de webhook
 	mu          sync.RWMutex             // Mutex para proteger o mapa de webhooks
+	msgStore    *msgstore.Store          // nil quando POSTGRES_DSN não está definida
 }
 
 // NewWhatsAppService é o construtor para WhatsAppService.
@@ -59,6 +62,20 @@ func NewWhatsAppService(ctx context.Context, phoneNumber string) (*WhatsAppServi
 		clientLog:   clientLog,
 		dbContainer: container,
 		webhooks:    make(map[string][]WebhookRule),
+	}
+
+	// Histórico de mensagens no Postgres é opcional: sem DSN (ou com o banco
+	// fora do ar) o device continua funcionando, só não grava.
+	if dsn := os.Getenv("POSTGRES_DSN"); dsn != "" {
+		store, err := msgstore.New(dsn)
+		if err != nil {
+			log.Printf("⚠️ Não foi possível conectar ao Postgres, mensagens não serão gravadas: %v\n", err)
+		} else {
+			service.msgStore = store
+			log.Println("🗄️ Gravação de mensagens no Postgres ativada.")
+		}
+	} else {
+		log.Println("⚠️ POSTGRES_DSN não definida — mensagens não serão gravadas.")
 	}
 
 	err = service.initClient()
@@ -133,6 +150,8 @@ func (s *WhatsAppService) SendMessage(number, message string) (whatsmeow.SendRes
 		return whatsmeow.SendResponse{}, fmt.Errorf("erro ao enviar mensagem para %s: %w", number, err)
 	}
 
+	go s.saveSentMessage(jid, msg, resp)
+
 	return resp, nil
 }
 
@@ -151,6 +170,8 @@ func (s *WhatsAppService) eventHandler(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
 		s.handleMessageEvent(v)
+	case *events.HistorySync:
+		s.handleHistorySync(v)
 	case *events.Connected:
 		log.Println("✅ WhatsApp conectado com sucesso!")
 	case *events.Disconnected:
@@ -166,6 +187,10 @@ func (s *WhatsAppService) eventHandler(evt interface{}) {
 
 // handleMessageEvent processa eventos de mensagem e dispara webhooks.
 func (s *WhatsAppService) handleMessageEvent(v *events.Message) {
+	if m, ok := s.toStoredMessage(v, "live"); ok {
+		go s.saveMessages(m)
+	}
+
 	number := v.Info.Sender.User
 	text := v.Message.GetConversation()
 
@@ -370,6 +395,8 @@ func (s *WhatsAppService) SendMedia(ctx context.Context, number string, filename
 			err,
 		)
 	}
+
+	go s.saveSentMessage(jid, message, resp)
 
 	return resp, nil
 }
